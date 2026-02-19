@@ -1,4 +1,8 @@
-# sprite-forge
+# SpriteForge ⚒️ - Forge your pixels from any source
+
+[![SpriteForge Banner](assets/image.png)](https://github.com/pdeligia/sprite-forge)
+
+[![CI](https://github.com/pdeligia/sprite-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/pdeligia/sprite-forge/actions/workflows/ci.yml)
 
 An AI-powered toolkit for generating game assets from video and image sources.
 
