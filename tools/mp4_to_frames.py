@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 
 
-def extract_frames(input_path, n_frames, output_dir, prefix, region, width, start, end):
+def extract_frames(input_path, n_frames, output_dir, prefix, suffix, region, width, start, end):
     """Extract N evenly-spaced frames from the video."""
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
@@ -71,7 +71,7 @@ def extract_frames(input_path, n_frames, output_dir, prefix, region, width, star
         out_h = round(src_h * (width / src_w))
 
     for i, ts in enumerate(timestamps, start=1):
-        out_file = os.path.join(output_dir, f"{prefix}_{str(i).zfill(pad)}.png")
+        out_file = os.path.join(output_dir, f"{prefix}_{str(i).zfill(pad)}{suffix}.png")
 
         # Seek to the target timestamp.
         cap.set(cv2.CAP_PROP_POS_MSEC, ts * 1000)
@@ -104,6 +104,7 @@ def main():
     parser.add_argument("n", type=int, help="Number of frames to extract")
     parser.add_argument("--output-dir", default="./tmp", help="Output directory (default: ./tmp)")
     parser.add_argument("--prefix", default="frame", help="Filename prefix (default: frame)")
+    parser.add_argument("--suffix", default="", help="Filename suffix before .png (e.g., @3x)")
     parser.add_argument(
         "--region", nargs=4, type=int, metavar=("X1", "Y1", "X2", "Y2"),
         help="Crop region: top-left (X1, Y1) to bottom-right (X2, Y2) in pixels",
@@ -140,7 +141,7 @@ def main():
     if args.start is not None and args.end is not None and args.start >= args.end:
         parser.error("Start time must be less than end time")
 
-    extract_frames(args.input, args.n, args.output_dir, args.prefix, args.region, args.width, args.start, args.end)
+    extract_frames(args.input, args.n, args.output_dir, args.prefix, args.suffix, args.region, args.width, args.start, args.end)
 
 
 if __name__ == "__main__":

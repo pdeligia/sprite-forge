@@ -117,6 +117,21 @@ def test_output_dir_cleanup():
         assert len(os.listdir(frames_dir)) == 2
 
 
+def test_suffix():
+    """Verify --suffix is included in output filenames."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        video = os.path.join(tmpdir, "test.mp4")
+        frames_dir = os.path.join(tmpdir, "frames")
+
+        run_tool([GEN_MP4, video, "--width", "320", "--height", "240", "--duration", "1"])
+        result = run_tool([MP4_TO_FRAMES, video, "2", "--output-dir", frames_dir,
+                           "--prefix", "forest_dungeon_bg", "--suffix", "@3x"])
+        assert result.returncode == 0, f"mp4_to_frames failed: {result.stderr}"
+
+        pngs = sorted(os.listdir(frames_dir))
+        assert pngs == ["forest_dungeon_bg_01@3x.png", "forest_dungeon_bg_02@3x.png"], f"Unexpected files: {pngs}"
+
+
 if __name__ == "__main__":
     tests = [
         test_basic_extraction,
@@ -125,6 +140,7 @@ if __name__ == "__main__":
         test_time_range,
         test_invalid_region,
         test_output_dir_cleanup,
+        test_suffix,
     ]
     failed = 0
     for test in tests:

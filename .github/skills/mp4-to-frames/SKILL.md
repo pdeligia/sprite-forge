@@ -26,13 +26,14 @@ uv run python tools/mp4_to_frames.py <input.mp4> <N> [options]
 |------|---------|-------------|
 | `--output-dir DIR` | `./tmp` | Output directory (nuked and recreated each run) |
 | `--prefix PREFIX` | `frame` | Filename prefix for output PNGs |
+| `--suffix SUFFIX` | (empty) | Filename suffix before .png (e.g., `@3x`) |
 | `--region X1 Y1 X2 Y2` | none | Crop region: top-left (X1, Y1) to bottom-right (X2, Y2) in pixels |
 | `--width W` | none | Scale output to width W, preserving aspect ratio. Uses nearest-neighbor interpolation (good for pixel art) |
 | `--start S` | 0 | Start time in seconds |
 | `--end E` | end of video | End time in seconds |
 
 ## Output
-- Files are named `{prefix}_{NN}.png` with zero-padded numbering (e.g., `forest_01.png`, `forest_02.png`)
+- Files are named `{prefix}_{NN}{suffix}.png` with zero-padded numbering (e.g., `forest_dungeon_bg_01@3x.png`)
 - Output directory is wiped clean before each run
 
 ## Important Notes

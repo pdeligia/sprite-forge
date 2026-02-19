@@ -20,4 +20,6 @@ uv sync
 | Tool | Description | Docs |
 |------|-------------|------|
 | `tools/gen_mp4.py` | Generate synthetic MP4 videos | [SKILL.md](.github/skills/gen-mp4/SKILL.md) |
+| `tools/merge_image.py` | Composite and merge images together | [SKILL.md](.github/skills/merge-image/SKILL.md) |
 | `tools/mp4_to_frames.py` | Extract evenly-spaced PNG frames from MP4 video | [SKILL.md](.github/skills/mp4-to-frames/SKILL.md) |
+| `tools/scale_image.py` | Scale an image up or down by a given factor | [SKILL.md](.github/skills/scale-image/SKILL.md) |
