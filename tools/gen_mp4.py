@@ -51,7 +51,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate synthetic MP4 videos."
     )
-    parser.add_argument("output", nargs="?", default="./tmp/test.mp4", help="Output MP4 file path (default: ./tmp/test.mp4)")
+    parser.add_argument("output", nargs="?", default="./tmp/gen_mp4/test.mp4", help="Output MP4 file path (default: ./tmp/gen_mp4/test.mp4)")
     parser.add_argument("--width", type=int, default=320, help="Video width in pixels (default: 320)")
     parser.add_argument("--height", type=int, default=240, help="Video height in pixels (default: 240)")
     parser.add_argument("--duration", type=float, default=1.0, help="Duration in seconds (default: 1.0)")

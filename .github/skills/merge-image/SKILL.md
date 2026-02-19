@@ -7,12 +7,9 @@ description: Composite and merge images together. Use this skill when the user w
 
 A Python tool for compositing and merging images together.
 
-## Location
-`tools/merge_image.py` in the sprite-forge repository.
-
 ## How to Run
 ```bash
-uv run python tools/merge_image.py <background.png> [options]
+uv run merge-image <background.png> [options]
 ```
 
 ## Arguments
@@ -45,15 +42,15 @@ Must provide either `--input` or `--input-dir` (not both).
 
 ### Merge a single image onto a background
 ```bash
-uv run python tools/merge_image.py bg.png --input frame_01.png
+uv run merge-image bg.png --input frame_01.png
 ```
 
 ### Merge all images with a prefix onto a background with offset
 ```bash
-uv run python tools/merge_image.py bg.png --input-dir ./tmp --prefix forest --offset 100 50
+uv run merge-image bg.png --input-dir ./tmp --prefix forest --offset 100 50
 ```
 
 ### Merge all PNGs in a directory
 ```bash
-uv run python tools/merge_image.py bg.png --input-dir ./tmp
+uv run merge-image bg.png --input-dir ./tmp
 ```

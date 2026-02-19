@@ -96,15 +96,15 @@ def test_color_rgb():
 
 
 def test_default_path():
-    """Generate a video with no output arg (default ./tmp/test.mp4)."""
+    """Generate a video with no output arg (default ./tmp/gen_mp4/test.mp4)."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Run from a temp dir so default ./tmp/test.mp4 goes there.
+        # Run from a temp dir so default ./tmp/gen_mp4/test.mp4 goes there.
         result = subprocess.run(
             [sys.executable, os.path.abspath(GEN_MP4)],
             capture_output=True, text=True, cwd=tmpdir,
         )
         assert result.returncode == 0, f"gen_mp4 failed: {result.stderr}"
-        assert os.path.isfile(os.path.join(tmpdir, "tmp", "test.mp4")), "Default output not created"
+        assert os.path.isfile(os.path.join(tmpdir, "tmp", "gen_mp4", "test.mp4")), "Default output not created"
 
 
 if __name__ == "__main__":

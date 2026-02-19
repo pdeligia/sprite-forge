@@ -7,12 +7,9 @@ description: Scale an image up or down by a given factor. Use this skill when th
 
 A Python tool for scaling images by a given factor.
 
-## Location
-`tools/scale_image.py` in the sprite-forge repository.
-
 ## How to Run
 ```bash
-uv run python tools/scale_image.py <factor> [options]
+uv run scale-image <factor> [options]
 ```
 
 ## Arguments
@@ -40,20 +37,20 @@ Must provide either `--input` or `--input-dir` (not both).
 
 ### Scale down @3x to @1x
 ```bash
-uv run python tools/scale_image.py 0.333333 --input bg@3x.png --output bg@1x.png
+uv run scale-image 0.333333 --input bg@3x.png --output bg@1x.png
 ```
 
 ### Scale up 2x for pixel art
 ```bash
-uv run python tools/scale_image.py 2.0 --input sprite.png --output sprite@2x.png
+uv run scale-image 2.0 --input sprite.png --output sprite@2x.png
 ```
 
 ### Scale all images with a prefix in a directory
 ```bash
-uv run python tools/scale_image.py 0.5 --input-dir ./tmp --prefix forest
+uv run scale-image 0.5 --input-dir ./tmp --prefix forest
 ```
 
 ### Scale all PNGs in a directory
 ```bash
-uv run python tools/scale_image.py 0.5 --input-dir ./tmp
+uv run scale-image 0.5 --input-dir ./tmp
 ```

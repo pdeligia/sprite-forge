@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract N evenly-spaced frames from an MP4 video as PNGs, with optional cropping and scaling."""
+"""Extract N frames from an MP4 video as PNGs, with optional cropping, scaling, and loop detection."""
 
 import argparse
 import os
@@ -9,8 +9,10 @@ import sys
 import cv2
 import numpy as np
 
+from tools.lib.video_utils import find_loop_segment
 
-def extract_frames(input_path, n_frames, output_dir, prefix, suffix, region, width, start, end):
+
+def extract_frames(input_path, n_frames, output_dir, prefix, suffix, region, width, start, end, loop):
     """Extract N evenly-spaced frames from the video."""
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
@@ -54,9 +56,24 @@ def extract_frames(input_path, n_frames, output_dir, prefix, suffix, region, wid
         print(f"Error: time range is empty ({t_start}s\u2013{t_end}s).", file=sys.stderr)
         sys.exit(1)
 
+    # If --loop, find the best loop segment.
+    if loop:
+        print(f"Scanning for loop in {t_start:.2f}s\u2013{t_end:.2f}s...")
+        result = find_loop_segment(cap, t_start, t_end)
+        if result is None:
+            print("Error: could not find a suitable loop segment.", file=sys.stderr)
+            sys.exit(1)
+        t_start, t_end, score = result
+        span = t_end - t_start
+        print(f"Best loop: {t_start:.2f}s \u2192 {t_end:.2f}s (score: {score:.3f})")
+
     # Calculate evenly-spaced timestamps within the time range.
+    # In loop mode, exclude the end frame (it matches the start frame).
     if n_frames == 1:
         timestamps = [t_start + span / 2]
+    elif loop:
+        step = span / n_frames
+        timestamps = [t_start + step * i for i in range(n_frames)]
     else:
         step = span / n_frames
         timestamps = [t_start + step * i + step / 2 for i in range(n_frames)]
@@ -98,11 +115,11 @@ def extract_frames(input_path, n_frames, output_dir, prefix, suffix, region, wid
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Extract N evenly-spaced frames from an MP4 video as PNGs."
+        description="Extract N frames from an MP4 video as PNGs."
     )
     parser.add_argument("input", help="Path to the input MP4 video")
     parser.add_argument("n", type=int, help="Number of frames to extract")
-    parser.add_argument("--output-dir", default="./tmp", help="Output directory (default: ./tmp)")
+    parser.add_argument("--output-dir", default="./tmp/mp4_to_frames", help="Output directory (default: ./tmp/mp4_to_frames)")
     parser.add_argument("--prefix", default="frame", help="Filename prefix (default: frame)")
     parser.add_argument("--suffix", default="", help="Filename suffix before .png (e.g., @3x)")
     parser.add_argument(
@@ -120,6 +137,10 @@ def main():
     parser.add_argument(
         "--end", type=float, default=None,
         help="End time in seconds (default: end of video)",
+    )
+    parser.add_argument(
+        "--loop", action="store_true",
+        help="Find the best looping segment using SSIM frame comparison, then extract N frames from it.",
     )
 
     args = parser.parse_args()
@@ -141,7 +162,7 @@ def main():
     if args.start is not None and args.end is not None and args.start >= args.end:
         parser.error("Start time must be less than end time")
 
-    extract_frames(args.input, args.n, args.output_dir, args.prefix, args.suffix, args.region, args.width, args.start, args.end)
+    extract_frames(args.input, args.n, args.output_dir, args.prefix, args.suffix, args.region, args.width, args.start, args.end, args.loop)
 
 
 if __name__ == "__main__":

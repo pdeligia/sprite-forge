@@ -7,18 +7,15 @@ description: Generate synthetic MP4 videos with configurable dimensions, duratio
 
 A Python tool that generates synthetic MP4 videos.
 
-## Location
-`tools/gen_mp4.py` in the sprite-forge repository.
-
 ## How to Run
 ```bash
-uv run python tools/gen_mp4.py [output] [options]
+uv run gen-mp4 [output] [options]
 ```
 
 ## Arguments
 | Argument | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `output` | No | `./tmp/test.mp4` | Output MP4 file path |
+| `output` | No | `./tmp/gen_mp4/test.mp4` | Output MP4 file path |
 
 ## Options
 | Flag | Default | Description |
@@ -33,15 +30,15 @@ uv run python tools/gen_mp4.py [output] [options]
 
 ### Generate a default 1-second black video
 ```bash
-uv run python tools/gen_mp4.py
+uv run gen-mp4
 ```
 
 ### Generate a 5-second 1280x720 blue video
 ```bash
-uv run python tools/gen_mp4.py ./tmp/bg.mp4 --width 1280 --height 720 --duration 5 --color blue
+uv run gen-mp4 ./tmp/bg.mp4 --width 1280 --height 720 --duration 5 --color blue
 ```
 
 ### Generate with custom RGB color
 ```bash
-uv run python tools/gen_mp4.py ./tmp/custom.mp4 --color 64,128,255
+uv run gen-mp4 ./tmp/custom.mp4 --color 64,128,255
 ```

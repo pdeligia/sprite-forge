@@ -8,6 +8,7 @@ import sys
 import tempfile
 
 import cv2
+import numpy as np
 
 
 TOOLS_DIR = os.path.join(os.path.dirname(__file__), "..", "tools")
@@ -132,6 +133,51 @@ def test_suffix():
         assert pngs == ["forest_dungeon_bg_01@3x.png", "forest_dungeon_bg_02@3x.png"], f"Unexpected files: {pngs}"
 
 
+def _make_looping_video(path, width=160, height=120, fps=30):
+    """Create a video with a repeating color cycle: red→green→blue→red→green→blue (2 loops of 1s each)."""
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(path, fourcc, fps, (width, height))
+    colors = [(0, 0, 255), (0, 255, 0), (255, 0, 0)]  # BGR: red, green, blue
+    frames_per_color = fps // 3
+    # Write 2 identical cycles so the loop finder can detect the repeat.
+    for _ in range(2):
+        for color in colors:
+            frame = np.full((height, width, 3), color, dtype=np.uint8)
+            for _ in range(frames_per_color):
+                writer.write(frame)
+    writer.release()
+
+
+def test_loop_basic():
+    """--loop should find a loop and extract frames."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        video = os.path.join(tmpdir, "loop.mp4")
+        frames_dir = os.path.join(tmpdir, "frames")
+        _make_looping_video(video)
+
+        result = run_tool([MP4_TO_FRAMES, video, "4", "--output-dir", frames_dir, "--loop"])
+        assert result.returncode == 0, f"mp4_to_frames --loop failed: {result.stderr}"
+        assert "score:" in result.stdout, f"Expected loop score in output: {result.stdout}"
+
+        pngs = sorted(f for f in os.listdir(frames_dir) if f.endswith(".png"))
+        assert len(pngs) == 4, f"Expected 4 frames, got {len(pngs)}: {pngs}"
+
+
+def test_loop_with_range():
+    """--loop with --start/--end should search within the given range."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        video = os.path.join(tmpdir, "loop.mp4")
+        frames_dir = os.path.join(tmpdir, "frames")
+        _make_looping_video(video)
+
+        result = run_tool([MP4_TO_FRAMES, video, "3", "--output-dir", frames_dir,
+                           "--loop", "--start", "0", "--end", "1.5"])
+        assert result.returncode == 0, f"mp4_to_frames --loop failed: {result.stderr}"
+
+        pngs = sorted(f for f in os.listdir(frames_dir) if f.endswith(".png"))
+        assert len(pngs) == 3, f"Expected 3 frames, got {len(pngs)}: {pngs}"
+
+
 if __name__ == "__main__":
     tests = [
         test_basic_extraction,
@@ -141,6 +187,8 @@ if __name__ == "__main__":
         test_invalid_region,
         test_output_dir_cleanup,
         test_suffix,
+        test_loop_basic,
+        test_loop_with_range,
     ]
     failed = 0
     for test in tests:
