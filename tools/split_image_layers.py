@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Split an image into N depth layers using HSV-based depth estimation."""
+"""Split an image into N depth layers using Depth Anything V2 monocular depth estimation."""
 
 import argparse
 import glob
@@ -11,37 +11,77 @@ import cv2
 import numpy as np
 
 
-# Depth score weights for HSV channels.
-WEIGHT_VALUE = 0.7       # Brightness (V): brighter = closer
-WEIGHT_SATURATION = 0.3  # Saturation (S): more saturated = closer
+# Model name mapping for Depth Anything V2.
+MODEL_MAP = {
+    "small": "depth-anything/Depth-Anything-V2-Small-hf",
+    "base": "depth-anything/Depth-Anything-V2-Base-hf",
+    "large": "depth-anything/Depth-Anything-V2-Large-hf",
+}
 
 
-def compute_depth_map(image):
-    """Compute a depth score map from an image using HSV channels.
+def get_device():
+    """Select the best available device."""
+    import torch
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
+
+def load_depth_pipeline(model_size):
+    """Load the Depth Anything V2 pipeline."""
+    from transformers import pipeline as hf_pipeline
+    model_name = MODEL_MAP[model_size]
+    device = get_device()
+    print(f"Loading {model_name} on {device}...")
+    pipe = hf_pipeline(task="depth-estimation", model=model_name, device=device)
+    return pipe
+
+
+def compute_depth_map(pipe, image_bgr):
+    """Run depth estimation on a BGR opencv image.
+
+    If pipe is None, uses a vertical gradient fallback (for testing without a model).
     Returns a float32 array in [0, 1] where 0 = farthest and 1 = nearest.
     """
-    hsv = cv2.cvtColor(image[:, :, :3], cv2.COLOR_BGR2HSV).astype(np.float32)
-    v = hsv[:, :, 2] / 255.0  # Value (brightness)
-    s = hsv[:, :, 1] / 255.0  # Saturation
+    h, w = image_bgr.shape[:2]
 
-    depth = WEIGHT_VALUE * v + WEIGHT_SATURATION * s
-    # Normalize to [0, 1].
+    if pipe is None:
+        # Fallback: vertical gradient (top=far, bottom=near).
+        y_grad = np.linspace(0, 1, h, dtype=np.float32).reshape(-1, 1)
+        return np.broadcast_to(y_grad, (h, w)).copy()
+
+    # Convert BGR to RGB PIL Image.
+    from PIL import Image
+    rgb = cv2.cvtColor(image_bgr[:, :, :3], cv2.COLOR_BGR2RGB)
+    pil_img = Image.fromarray(rgb)
+
+    result = pipe(pil_img)
+    depth_pil = result["depth"]
+
+    # Convert to numpy and normalize to [0, 1].
+    depth = np.array(depth_pil, dtype=np.float32)
     d_min, d_max = depth.min(), depth.max()
     if d_max - d_min > 0:
         depth = (depth - d_min) / (d_max - d_min)
     else:
         depth = np.zeros_like(depth)
 
+    # Resize to match original image dimensions (pipeline may resize).
+    h, w = image_bgr.shape[:2]
+    if depth.shape != (h, w):
+        depth = cv2.resize(depth, (w, h), interpolation=cv2.INTER_LINEAR)
+
     return depth
 
 
-def split_layers(image, n_layers, feather=0):
-    """Split an image into N depth layers.
+def split_layers(image, depth, n_layers, feather=0):
+    """Split an image into N depth layers using quantile-based thresholds.
 
+    Uses quantiles so each layer gets roughly equal pixel coverage.
     Returns a list of RGBA images (back-to-front, layer 1 = farthest).
     """
-    depth = compute_depth_map(image)
     h, w = image.shape[:2]
 
     # Ensure we have an alpha channel.
@@ -50,12 +90,17 @@ def split_layers(image, n_layers, feather=0):
     else:
         bgra = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)
 
-    layers = []
-    band_size = 1.0 / n_layers
+    # Compute quantile thresholds for equal pixel distribution.
+    flat = depth.flatten()
+    thresholds = [0.0]
+    for i in range(1, n_layers):
+        thresholds.append(np.percentile(flat, 100.0 * i / n_layers))
+    thresholds.append(1.0)
 
+    layers = []
     for i in range(n_layers):
-        lo = i * band_size
-        hi = (i + 1) * band_size
+        lo = thresholds[i]
+        hi = thresholds[i + 1]
 
         # Create mask for this depth band.
         if i == n_layers - 1:
@@ -72,11 +117,11 @@ def split_layers(image, n_layers, feather=0):
 
         # Build RGBA layer.
         layer = bgra.copy()
-        layer[:, :, 3] = (mask_f * 255).astype(np.uint8)
+        layer[:, :, 3] = (mask_f * bgra[:, :, 3].astype(np.float32) / 255.0 * 255).astype(np.uint8)
 
         layers.append(layer)
 
-    return layers, depth
+    return layers
 
 
 def layer_name_suffix(idx, n_layers):
@@ -108,14 +153,15 @@ def derive_output_name(input_basename, layer_idx, n_layers, suffix, pad):
     return f"{name}_layer_{layer_num}{suffix}{ext}"
 
 
-def process_file(input_path, output_dir, n_layers, suffix, feather, preview):
+def process_file(pipe, input_path, output_dir, n_layers, suffix, feather, preview):
     """Split a single image into layers and save them."""
     image = cv2.imread(input_path, cv2.IMREAD_UNCHANGED)
     if image is None:
         print(f"Error: could not read '{input_path}'.", file=sys.stderr)
         return False
 
-    layers, depth = split_layers(image, n_layers, feather)
+    depth = compute_depth_map(pipe, image)
+    layers = split_layers(image, depth, n_layers, feather)
     pad = max(2, len(str(n_layers)))
     basename = os.path.basename(input_path)
 
@@ -141,7 +187,7 @@ def process_file(input_path, output_dir, n_layers, suffix, feather, preview):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Split an image into N depth layers using HSV-based depth estimation."
+        description="Split an image into N depth layers using Depth Anything V2 depth estimation."
     )
     # Input modes (same pattern as merge_image / scale_image).
     parser.add_argument("--input", dest="input_file", help="Single input image file")
@@ -159,6 +205,14 @@ def main():
         help="Edge feather radius in pixels (0 = hard edges, default: 0)",
     )
     parser.add_argument("--preview", action="store_true", help="Output a depth map visualization")
+    parser.add_argument(
+        "--model", choices=["small", "base", "large"], default="small",
+        help="Depth Anything V2 model size (default: small). Larger = better quality, slower.",
+    )
+    parser.add_argument(
+        "--no-model", action="store_true",
+        help="Skip depth model, use vertical gradient fallback (for testing/CI).",
+    )
 
     args = parser.parse_args()
 
@@ -190,10 +244,13 @@ def main():
         shutil.rmtree(args.output_dir)
     os.makedirs(args.output_dir)
 
+    # Load the depth model once, reuse for all files.
+    pipe = None if args.no_model else load_depth_pipeline(args.model)
+
     count = 0
     for f in files:
         print(f"[{count + 1}/{len(files)}] {os.path.basename(f)}:")
-        if process_file(f, args.output_dir, args.layers, args.suffix, args.feather, args.preview):
+        if process_file(pipe, f, args.output_dir, args.layers, args.suffix, args.feather, args.preview):
             count += 1
 
     print(f"\nDone — {count} image(s) split into {args.layers} layers each → {args.output_dir}/")

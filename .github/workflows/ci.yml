@@ -20,9 +20,10 @@ jobs:
 
       - name: Run tests
         run: |
+          uv run python tests/test_analyze_image.py
           uv run python tests/test_analyze_mp4.py
           uv run python tests/test_gen_mp4.py
-          uv run python tests/test_mp4_to_frames.py
+          uv run python tests/test_extract_mp4_frames.py
           uv run python tests/test_merge_image.py
           uv run python tests/test_scale_image.py
           uv run python tests/test_split_image_layers.py

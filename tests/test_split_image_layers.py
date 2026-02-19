@@ -48,7 +48,7 @@ def test_basic_split():
         out_dir = os.path.join(tmpdir, "out")
         _make_gradient_image(img_path)
 
-        result = run_tool([SPLIT, "--input", img_path, "--layers", "3", "--output-dir", out_dir])
+        result = run_tool([SPLIT, "--no-model", "--input", img_path, "--layers", "3", "--output-dir", out_dir])
         assert result.returncode == 0, f"Failed: {result.stderr}"
 
         pngs = sorted(f for f in os.listdir(out_dir) if f.endswith(".png"))
@@ -67,7 +67,7 @@ def test_layer_naming_with_suffix():
         out_dir = os.path.join(tmpdir, "out")
         _make_gradient_image(img_path)
 
-        result = run_tool([SPLIT, "--input", img_path, "--layers", "3",
+        result = run_tool([SPLIT, "--no-model", "--input", img_path, "--layers", "3",
                            "--output-dir", out_dir, "--suffix", "@3x"])
         assert result.returncode == 0, f"Failed: {result.stderr}"
 
@@ -83,7 +83,7 @@ def test_layers_have_transparency():
         out_dir = os.path.join(tmpdir, "out")
         _make_gradient_image(img_path)
 
-        run_tool([SPLIT, "--input", img_path, "--layers", "3", "--output-dir", out_dir])
+        run_tool([SPLIT, "--no-model", "--input", img_path, "--layers", "3", "--output-dir", out_dir])
 
         for f in os.listdir(out_dir):
             img = cv2.imread(os.path.join(out_dir, f), cv2.IMREAD_UNCHANGED)
@@ -99,7 +99,7 @@ def test_feathering():
         out_dir = os.path.join(tmpdir, "out")
         _make_gradient_image(img_path)
 
-        run_tool([SPLIT, "--input", img_path, "--layers", "2",
+        run_tool([SPLIT, "--no-model", "--input", img_path, "--layers", "2",
                   "--output-dir", out_dir, "--feather", "5"])
 
         # At least one layer should have semi-transparent pixels (not just 0 or 255).
@@ -120,7 +120,7 @@ def test_preview_depth_map():
         out_dir = os.path.join(tmpdir, "out")
         _make_gradient_image(img_path)
 
-        run_tool([SPLIT, "--input", img_path, "--layers", "2",
+        run_tool([SPLIT, "--no-model", "--input", img_path, "--layers", "2",
                   "--output-dir", out_dir, "--preview"])
 
         files = os.listdir(out_dir)
@@ -140,7 +140,7 @@ def test_batch_mode():
         _make_gradient_image(os.path.join(input_dir, "bg_02.png"))
         _make_gradient_image(os.path.join(input_dir, "other.png"))
 
-        result = run_tool([SPLIT, "--input-dir", input_dir, "--prefix", "bg_",
+        result = run_tool([SPLIT, "--no-model", "--input-dir", input_dir, "--prefix", "bg_",
                            "--layers", "2", "--output-dir", out_dir])
         assert result.returncode == 0, f"Failed: {result.stderr}"
 
@@ -160,7 +160,7 @@ def test_output_dir_nuked():
             f.write("old")
 
         _make_gradient_image(img_path)
-        run_tool([SPLIT, "--input", img_path, "--layers", "2", "--output-dir", out_dir])
+        run_tool([SPLIT, "--no-model", "--input", img_path, "--layers", "2", "--output-dir", out_dir])
 
         assert not os.path.exists(stale), "Stale file should have been removed"
 

@@ -1,6 +1,6 @@
 ---
 name: analyze-mp4
-description: Analyze an MP4 video and recommend the optimal number of frames for animation extraction. Use this skill before mp4-to-frames to determine how many frames to extract for smooth, efficient animations.
+description: Analyze an MP4 video and recommend the optimal number of frames for animation extraction. Use this skill before extract-mp4-frames to determine how many frames to extract for smooth, efficient animations.
 ---
 
 # analyze-mp4
@@ -59,9 +59,9 @@ The tool prints:
 - Requires `uv sync` to have been run first to install dependencies (opencv-python, scikit-image).
 
 ## Workflow
-Use this tool before `mp4-to-frames` to decide how many frames to extract:
+Use this tool before `extract-mp4-frames` to decide how many frames to extract:
 1. `uv run analyze-mp4 video.mp4 --loop` → get recommended N
-2. `uv run mp4-to-frames video.mp4 <N> --loop --prefix forest` → extract frames
+2. `uv run extract-mp4-frames video.mp4 <N> --loop --prefix forest` → extract frames
 
 ## Examples
 

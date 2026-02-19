@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for mp4_to_frames tool."""
+"""Tests for extract_mp4_frames tool."""
 
 import os
 import shutil
@@ -13,7 +13,7 @@ import numpy as np
 
 TOOLS_DIR = os.path.join(os.path.dirname(__file__), "..", "tools")
 GEN_MP4 = os.path.join(TOOLS_DIR, "gen_mp4.py")
-MP4_TO_FRAMES = os.path.join(TOOLS_DIR, "mp4_to_frames.py")
+EXTRACT_MP4_FRAMES = os.path.join(TOOLS_DIR, "extract_mp4_frames.py")
 
 
 def run_tool(args):
@@ -35,8 +35,8 @@ def test_basic_extraction():
         assert result.returncode == 0, f"gen_mp4 failed: {result.stderr}"
 
         # Extract 4 frames.
-        result = run_tool([MP4_TO_FRAMES, video, "4", "--output-dir", frames_dir, "--prefix", "test"])
-        assert result.returncode == 0, f"mp4_to_frames failed: {result.stderr}"
+        result = run_tool([EXTRACT_MP4_FRAMES, video, "4", "--output-dir", frames_dir, "--prefix", "test"])
+        assert result.returncode == 0, f"extract_mp4_frames failed: {result.stderr}"
 
         # Verify frame count.
         pngs = sorted(f for f in os.listdir(frames_dir) if f.endswith(".png"))
@@ -54,8 +54,8 @@ def test_region_crop():
         frames_dir = os.path.join(tmpdir, "frames")
 
         run_tool([GEN_MP4, video, "--width", "320", "--height", "240", "--duration", "1"])
-        result = run_tool([MP4_TO_FRAMES, video, "1", "--output-dir", frames_dir, "--region", "10", "10", "160", "130"])
-        assert result.returncode == 0, f"mp4_to_frames failed: {result.stderr}"
+        result = run_tool([EXTRACT_MP4_FRAMES, video, "1", "--output-dir", frames_dir, "--region", "10", "10", "160", "130"])
+        assert result.returncode == 0, f"extract_mp4_frames failed: {result.stderr}"
 
         img = cv2.imread(os.path.join(frames_dir, "frame_01.png"))
         assert img.shape[1] == 150 and img.shape[0] == 120, f"Unexpected dimensions: {img.shape}"
@@ -68,9 +68,9 @@ def test_region_with_width_scaling():
         frames_dir = os.path.join(tmpdir, "frames")
 
         run_tool([GEN_MP4, video, "--width", "320", "--height", "240", "--duration", "1"])
-        result = run_tool([MP4_TO_FRAMES, video, "1", "--output-dir", frames_dir,
+        result = run_tool([EXTRACT_MP4_FRAMES, video, "1", "--output-dir", frames_dir,
                            "--region", "10", "10", "160", "130", "--width", "600"])
-        assert result.returncode == 0, f"mp4_to_frames failed: {result.stderr}"
+        assert result.returncode == 0, f"extract_mp4_frames failed: {result.stderr}"
 
         img = cv2.imread(os.path.join(frames_dir, "frame_01.png"))
         assert img.shape[1] == 600 and img.shape[0] == 480, f"Unexpected dimensions: {img.shape}"
@@ -83,8 +83,8 @@ def test_time_range():
         frames_dir = os.path.join(tmpdir, "frames")
 
         run_tool([GEN_MP4, video, "--width", "320", "--height", "240", "--duration", "5"])
-        result = run_tool([MP4_TO_FRAMES, video, "3", "--output-dir", frames_dir, "--start", "1", "--end", "3"])
-        assert result.returncode == 0, f"mp4_to_frames failed: {result.stderr}"
+        result = run_tool([EXTRACT_MP4_FRAMES, video, "3", "--output-dir", frames_dir, "--start", "1", "--end", "3"])
+        assert result.returncode == 0, f"extract_mp4_frames failed: {result.stderr}"
 
         pngs = sorted(f for f in os.listdir(frames_dir) if f.endswith(".png"))
         assert len(pngs) == 3, f"Expected 3 frames, got {len(pngs)}"
@@ -97,7 +97,7 @@ def test_invalid_region():
         frames_dir = os.path.join(tmpdir, "frames")
 
         run_tool([GEN_MP4, video, "--width", "320", "--height", "240", "--duration", "1"])
-        result = run_tool([MP4_TO_FRAMES, video, "1", "--output-dir", frames_dir, "--region", "0", "0", "400", "300"])
+        result = run_tool([EXTRACT_MP4_FRAMES, video, "1", "--output-dir", frames_dir, "--region", "0", "0", "400", "300"])
         assert result.returncode != 0, "Expected failure for out-of-bounds region"
 
 
@@ -110,11 +110,11 @@ def test_output_dir_cleanup():
         run_tool([GEN_MP4, video, "--width", "320", "--height", "240", "--duration", "1"])
 
         # First run: 4 frames.
-        run_tool([MP4_TO_FRAMES, video, "4", "--output-dir", frames_dir])
+        run_tool([EXTRACT_MP4_FRAMES, video, "4", "--output-dir", frames_dir])
         assert len(os.listdir(frames_dir)) == 4
 
         # Second run: 2 frames — old files should be gone.
-        run_tool([MP4_TO_FRAMES, video, "2", "--output-dir", frames_dir])
+        run_tool([EXTRACT_MP4_FRAMES, video, "2", "--output-dir", frames_dir])
         assert len(os.listdir(frames_dir)) == 2
 
 
@@ -125,9 +125,9 @@ def test_suffix():
         frames_dir = os.path.join(tmpdir, "frames")
 
         run_tool([GEN_MP4, video, "--width", "320", "--height", "240", "--duration", "1"])
-        result = run_tool([MP4_TO_FRAMES, video, "2", "--output-dir", frames_dir,
+        result = run_tool([EXTRACT_MP4_FRAMES, video, "2", "--output-dir", frames_dir,
                            "--prefix", "forest_dungeon_bg", "--suffix", "@3x"])
-        assert result.returncode == 0, f"mp4_to_frames failed: {result.stderr}"
+        assert result.returncode == 0, f"extract_mp4_frames failed: {result.stderr}"
 
         pngs = sorted(os.listdir(frames_dir))
         assert pngs == ["forest_dungeon_bg_01@3x.png", "forest_dungeon_bg_02@3x.png"], f"Unexpected files: {pngs}"
@@ -155,8 +155,8 @@ def test_loop_basic():
         frames_dir = os.path.join(tmpdir, "frames")
         _make_looping_video(video)
 
-        result = run_tool([MP4_TO_FRAMES, video, "4", "--output-dir", frames_dir, "--loop"])
-        assert result.returncode == 0, f"mp4_to_frames --loop failed: {result.stderr}"
+        result = run_tool([EXTRACT_MP4_FRAMES, video, "4", "--output-dir", frames_dir, "--loop"])
+        assert result.returncode == 0, f"extract_mp4_frames --loop failed: {result.stderr}"
         assert "score:" in result.stdout, f"Expected loop score in output: {result.stdout}"
 
         pngs = sorted(f for f in os.listdir(frames_dir) if f.endswith(".png"))
@@ -170,9 +170,9 @@ def test_loop_with_range():
         frames_dir = os.path.join(tmpdir, "frames")
         _make_looping_video(video)
 
-        result = run_tool([MP4_TO_FRAMES, video, "3", "--output-dir", frames_dir,
+        result = run_tool([EXTRACT_MP4_FRAMES, video, "3", "--output-dir", frames_dir,
                            "--loop", "--start", "0", "--end", "1.5"])
-        assert result.returncode == 0, f"mp4_to_frames --loop failed: {result.stderr}"
+        assert result.returncode == 0, f"extract_mp4_frames --loop failed: {result.stderr}"
 
         pngs = sorted(f for f in os.listdir(frames_dir) if f.endswith(".png"))
         assert len(pngs) == 3, f"Expected 3 frames, got {len(pngs)}: {pngs}"
