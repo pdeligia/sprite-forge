@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 from skimage.metrics import structural_similarity as ssim
 
-from tools.lib.console import console, Table, Panel
+from tools.lib.console import console, Table, Rule
 from tools.lib.video_utils import find_loop_segment, sample_frames_ssim
 
 
@@ -186,20 +186,22 @@ def analyze_video(input_path, start, end, loop, region, width):
 
     # Print header.
     fname = os.path.basename(input_path)
+    console.print(Rule(f"[bold cyan]🎬 Video · {fname}[/bold cyan]", align="left"))
+    console.print()
     if start is not None or end is not None:
         seg_start = start if start is not None else 0.0
         seg_end = end if end is not None else duration
-        header = f"{fname} ([cyan]{fps:.0f}fps[/cyan], {span:.1f}s segment [{t_start:.2f}s–{t_end:.2f}s], {native_frames_in_segment} native frames)"
+        console.print(f"  FPS: [cyan]{fps:.0f}[/cyan], {span:.1f}s segment [{t_start:.2f}s–{t_end:.2f}s], {native_frames_in_segment} native frames")
     else:
-        header = f"{fname} ([cyan]{fps:.0f}fps[/cyan], {span:.1f}s, {native_frames_in_segment} native frames)"
-    console.print(Panel(header, title="[bold]Video[/bold]", expand=False))
+        console.print(f"  FPS: [cyan]{fps:.0f}[/cyan], {span:.1f}s, {native_frames_in_segment} native frames")
 
     if loop_info:
         ls, le, sc = loop_info
-        console.print(f"Best loop: {ls:.2f}s → {le:.2f}s (score: {sc:.3f}, {span:.1f}s segment, {native_frames_in_segment} native frames)")
+        console.print(f"  Best loop: {ls:.2f}s → {le:.2f}s (score: {sc:.3f}, {span:.1f}s segment, {native_frames_in_segment} native frames)")
 
-    console.print(f"Motion level: [bold]{motion}[/bold] (avg inter-frame SSIM: {avg_ssim:.2f})")
-    console.print(f"\nRecommended number of frames (N): [bold]{optimal_n}[/bold]")
+    console.print(f"  Motion level: [bold]{motion}[/bold] (avg inter-frame SSIM: {avg_ssim:.2f})")
+    console.print(f"  Recommended number of frames (N): [bold]{optimal_n}[/bold]")
+    console.print()
 
     # Print table.
     table = Table(box=None, padding=(0, 2))
@@ -230,16 +232,18 @@ def analyze_video(input_path, start, end, loop, region, width):
         _, _, loop_score = loop_info
         time_per_frame = span / optimal_n
 
-        playback_lines = [f"timePerFrame: {time_per_frame:.2f}s"]
+        console.print()
+        console.print("  [bold dim]Playback[/bold dim]")
+        console.print("  [dim]─────────────────[/dim]")
+        console.print(f"  timePerFrame: {time_per_frame:.2f}s")
         if loop_score >= 0.98:
-            playback_lines.append(f"Strategy: forward (loop score {loop_score:.3f} ≥ 0.98 — seamless)")
-            playback_lines.append(f"Cycle: 1→2→…→N→1→… ({optimal_n} steps, {span:.2f}s per cycle)")
+            console.print(f"  Strategy: forward (loop score {loop_score:.3f} ≥ 0.98 — seamless)")
+            console.print(f"  Cycle: 1→2→…→N→1→… ({optimal_n} steps, {span:.2f}s per cycle)")
         else:
             ping_pong_steps = max(optimal_n * 2 - 2, optimal_n)
             ping_pong_duration = ping_pong_steps * time_per_frame
-            playback_lines.append(f"Strategy: ping-pong (loop score {loop_score:.3f} < 0.98 — visible jump if forward-only)")
-            playback_lines.append(f"Cycle: 1→2→…→N→…→2→1 ({ping_pong_steps} steps, {ping_pong_duration:.2f}s per cycle)")
-        console.print(Panel("\n".join(playback_lines), title="[bold]Playback[/bold]", expand=False))
+            console.print(f"  Strategy: ping-pong (loop score {loop_score:.3f} < 0.98 — visible jump if forward-only)")
+            console.print(f"  Cycle: 1→2→…→N→…→2→1 ({ping_pong_steps} steps, {ping_pong_duration:.2f}s per cycle)")
 
     console.print()
 

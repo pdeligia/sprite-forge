@@ -3,12 +3,13 @@
 
 import argparse
 import os
+import re
 import sys
 
 import cv2
 import numpy as np
 
-from tools.lib.console import console, Table, Panel
+from tools.lib.console import console, Table, Rule, Panel
 
 
 def format_size(bytes_val):
@@ -33,20 +34,37 @@ def analyze_colors(image):
 
     # Dominant color (most common hue bucket).
     hue = hsv[:, :, 0].flatten()
+    val = hsv[:, :, 2].flatten()
+    sat = hsv[:, :, 1].flatten()
     # Filter out very dark or desaturated pixels.
-    mask = (hsv[:, :, 2].flatten() > 30) & (hsv[:, :, 1].flatten() > 30)
-    if mask.sum() > 0:
-        hue_filtered = hue[mask]
-        hist, _ = np.histogram(hue_filtered, bins=18, range=(0, 180))
+    chromatic_mask = (val > 50) & (sat > 50)
+    if chromatic_mask.sum() > 0:
+        hue_filtered = hue[chromatic_mask]
+        hist, _ = np.histogram(hue_filtered, bins=12, range=(0, 180))
         dominant_bucket = hist.argmax()
+        # 12 bins × 15° each covers the full 0–180 OpenCV hue range.
         hue_names = [
-            "red", "orange", "yellow", "yellow-green", "green", "green-cyan",
-            "cyan", "cyan-blue", "blue", "blue-purple", "purple", "magenta",
-            "pink-red", "red", "red-orange", "orange", "gold", "yellow",
+            "red", "orange", "yellow", "yellow-green", "green", "cyan-green",
+            "cyan", "blue-cyan", "blue", "blue-purple", "purple", "magenta",
         ]
         stats["dominant_hue"] = hue_names[dominant_bucket]
+
+        # Compute average RGB of pixels in the dominant hue bucket for a swatch.
+        bucket_lo = dominant_bucket * 15
+        bucket_hi = bucket_lo + 15
+        bucket_mask = chromatic_mask & (hue >= bucket_lo) & (hue < bucket_hi)
+        if bucket_mask.sum() > 0:
+            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+            avg_rgb = rgb.reshape(-1, 3)[bucket_mask].mean(axis=0).astype(int)
+            stats["dominant_hex"] = f"#{avg_rgb[0]:02x}{avg_rgb[1]:02x}{avg_rgb[2]:02x}"
+        else:
+            stats["dominant_hex"] = None
     else:
+        # Mostly dark or desaturated — report as neutral with average color swatch.
         stats["dominant_hue"] = "neutral/gray"
+        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        avg_rgb = rgb.reshape(-1, 3).mean(axis=0).astype(int)
+        stats["dominant_hex"] = f"#{avg_rgb[0]:02x}{avg_rgb[1]:02x}{avg_rgb[2]:02x}"
 
     # Unique color count (approximate via downscaled quantization).
     small = cv2.resize(bgr, (100, 100))
@@ -214,6 +232,48 @@ def analyze_depth(image, model_size):
     return stats
 
 
+def analyze_description(image):
+    """Generate a detailed description of the image using Qwen2-VL."""
+    from PIL import Image as PILImage
+    from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+    import torch
+
+    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+    model_name = "Qwen/Qwen2-VL-2B-Instruct"
+    print(f"Loading {model_name} on {device}...", file=sys.stderr)
+
+    dtype = torch.float32 if device == "mps" else torch.float16
+    # Cap image to 512×512 — enough detail for description, saves memory.
+    processor = AutoProcessor.from_pretrained(
+        model_name, min_pixels=128 * 128, max_pixels=256 * 256, use_fast=False,
+    )
+    model = Qwen2VLForConditionalGeneration.from_pretrained(
+        model_name, torch_dtype=dtype,
+    ).to(device)
+
+    rgb = cv2.cvtColor(image[:, :, :3], cv2.COLOR_BGR2RGB)
+    pil_img = PILImage.fromarray(rgb)
+
+    prompt = (
+        "Describe this image in great detail for an artist to recreate it faithfully. "
+        "Include: art style, scene composition, all visible objects, colors, lighting, "
+        "textures, and mood."
+    )
+    messages = [
+        {"role": "user", "content": [
+            {"type": "image", "image": pil_img},
+            {"type": "text", "text": prompt},
+        ]}
+    ]
+
+    text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    inputs = processor(text=[text], images=[pil_img], return_tensors="pt", padding=True).to(device)
+    out = model.generate(**inputs, max_new_tokens=1024)
+    return processor.batch_decode(
+        out[:, inputs.input_ids.shape[1]:], skip_special_tokens=True,
+    )[0].strip()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Analyze an image and report statistics for game asset work."
@@ -227,8 +287,19 @@ def main():
         "--model", choices=["small", "base", "large"], default="small",
         help="Depth model size when --depth is used (default: small).",
     )
+    parser.add_argument(
+        "--describe", action="store_true",
+        help="Generate a detailed AI description of the image using Qwen2-VL.",
+    )
+    parser.add_argument(
+        "--fetch-model", action="store_true",
+        help="Allow downloading / updating HuggingFace models. By default, cached models are used offline.",
+    )
 
     args = parser.parse_args()
+
+    if not args.fetch_model:
+        os.environ["HF_HUB_OFFLINE"] = "1"
 
     if not os.path.isfile(args.input):
         parser.error(f"Input file not found: {args.input}")
@@ -244,41 +315,62 @@ def main():
     file_size = os.path.getsize(args.input)
     fname = os.path.basename(args.input)
 
-    # Basic info.
-    info_lines = [
-        f"Dimensions: [cyan]{w}×{h}[/cyan]",
-        f"Channels: {channels} ({'BGRA' if has_alpha else 'BGR'})",
-        f"File size: {format_size(file_size)}",
-    ]
-
+    # Section: Image
+    console.print(Rule(f"[bold cyan]📷 Image · {fname}[/bold cyan]", align="left"))
+    console.print()
+    console.print(f"  Dimensions: [cyan]{w}×{h}[/cyan]")
+    console.print(f"  Channels: {channels} ({'BGRA' if has_alpha else 'BGR'})")
+    console.print(f"  File size: {format_size(file_size)}")
     if has_alpha:
         alpha = image[:, :, 3]
         fully_opaque = (alpha == 255).sum() / alpha.size * 100
         fully_transparent = (alpha == 0).sum() / alpha.size * 100
-        info_lines.append(f"Alpha: [green]{fully_opaque:.1f}%[/green] opaque, [yellow]{fully_transparent:.1f}%[/yellow] transparent")
+        console.print(f"  Alpha: [green]{fully_opaque:.1f}%[/green] opaque, [yellow]{fully_transparent:.1f}%[/yellow] transparent")
+    console.print()
 
-    console.print(Panel("\n".join(info_lines), title=f"[bold]{fname}[/bold]", expand=False))
-
-    # Color stats.
+    # Section: Color
     colors = analyze_colors(image)
-    color_table = Table(show_header=False, box=None, padding=(0, 2))
-    color_table.add_column(style="dim")
-    color_table.add_column()
-    color_table.add_row("Dominant hue:", colors['dominant_hue'])
-    color_table.add_row("Brightness:", f"avg {colors['avg_brightness']:.0f}/255 (range {colors['brightness_range'][0]}–{colors['brightness_range'][1]})")
-    color_table.add_row("Saturation:", f"avg {colors['avg_saturation']:.0f}/255 (range {colors['saturation_range'][0]}–{colors['saturation_range'][1]})")
-    color_table.add_row("Color richness:", f"~{colors['color_richness']} unique colors (quantized)")
-    console.print("\n[bold]Color[/bold]")
-    console.print(color_table)
+    console.print(Rule("[bold cyan]🎨 Color[/bold cyan]", align="left"))
+    console.print()
+    hue_label = colors['dominant_hue']
+    if colors.get('dominant_hex'):
+        hx = colors['dominant_hex']
+        hue_label = f"{hue_label} ({hx}) · [on {hx}]      [/on {hx}]"
+    console.print(f"  Dominant hue: {hue_label}")
+    console.print(f"  Brightness: avg {colors['avg_brightness']:.0f}/255 (range {colors['brightness_range'][0]}–{colors['brightness_range'][1]})")
+    console.print(f"  Saturation: avg {colors['avg_saturation']:.0f}/255 (range {colors['saturation_range'][0]}–{colors['saturation_range'][1]})")
+    console.print(f"  Color richness: ~{colors['color_richness']} unique colors (quantized)")
+    console.print()
 
-    # Depth analysis (optional).
-    if args.depth:
+    # Section: Description (optional)
+    if args.describe:
+        console.print(Rule("[bold cyan]📝 Description[/bold cyan]", align="left"))
         console.print()
-        depth = analyze_depth(image, args.model)
-        console.print(f"\n[bold]Depth[/bold] (Depth Anything V2 — {args.model})")
-        console.print(f"  Mean: {depth['depth_mean']:.3f}  Std: {depth['depth_std']:.3f}")
+        description = analyze_description(image)
+        console.print()
+        # Sanitize: collapse runs of whitespace, strip each line, drop blanks.
+        lines = []
+        for line in description.split("\n"):
+            line = re.sub(r'\s+', ' ', line).strip()
+            if line:
+                lines.append(line)
+        clean = "\n".join(lines)
+        console.print(Panel(clean, title="Model · Qwen/Qwen2-VL-2B-Instruct", border_style="dim", padding=(1, 2)))
+        console.print()
 
-        layer_table = Table(title="Layer Coverage", box=None, padding=(0, 2))
+    # Section: Depth (optional, with subsections)
+    if args.depth:
+        depth = analyze_depth(image, args.model)
+        console.print(Rule(f"[bold cyan]🔍 Depth[/bold cyan]", align="left"))
+        console.print()
+        console.print(f"  Model: Depth Anything V2 — {args.model}")
+        console.print(f"  Mean: {depth['depth_mean']:.3f}  Std: {depth['depth_std']:.3f}")
+        console.print()
+
+        # Subsection: Layer Coverage
+        console.print("  [bold dim]Layer Coverage[/bold dim]")
+        console.print("  [dim]─────────────────[/dim]")
+        layer_table = Table(box=None, padding=(0, 2))
         layer_table.add_column("Layers", justify="right")
         layer_table.add_column("Coverage per layer")
         for n, layers in depth["layer_table"]:
@@ -286,13 +378,15 @@ def main():
             coverages = ", ".join(f"{pct:.0f}%" for _, _, pct in layers)
             layer_table.add_row(str(n), f"{coverages}{marker}")
         console.print(layer_table)
+        console.print()
 
+        # Subsection: Halo Analysis
         halo = depth["halo_analysis"]
-        console.print(f"\n[bold]Halo analysis[/bold] (for {depth['recommended_layers']} layers)")
+        console.print("  [bold dim]Halo Analysis[/bold dim]")
+        console.print("  [dim]─────────────────[/dim]")
         if halo["total_fragments"] > 0:
             console.print(f"  Fragments: {halo['total_fragments']} ({halo['total_pixels']} pixels, {halo['pct_of_image']:.2f}% of image)")
             console.print(f"  Thickness: min {halo['min']}px, median {halo['median']}px, max {halo['max']}px")
-
             halo_table = Table(box=None, padding=(0, 2))
             halo_table.add_column("Radius", justify="right")
             halo_table.add_column("Halos caught", justify="right")
@@ -303,16 +397,17 @@ def main():
             console.print(halo_table)
         else:
             console.print("  No halos detected.")
+        console.print()
 
+        # Subsection: Recommendations
+        console.print("  [bold dim]Recommendations[/bold dim]")
+        console.print("  [dim]─────────────────[/dim]")
+        console.print(f"  Parallax layers: [bold]{depth['recommended_layers']}[/bold] ({depth['verdict']})")
         rec_ce = depth["recommended_clean_edges"]
-        rec_lines = [
-            f"Parallax layers: [bold]{depth['recommended_layers']}[/bold] ({depth['verdict']})",
-        ]
         if rec_ce > 0:
-            rec_lines.append(f"Clean edges: [bold]{rec_ce}px[/bold]")
+            console.print(f"  Clean edges: [bold]{rec_ce}px[/bold]")
         else:
-            rec_lines.append("Clean edges: not needed (no significant halos detected)")
-        console.print(Panel("\n".join(rec_lines), title="[bold]Recommendations[/bold]", expand=False))
+            console.print("  Clean edges: not needed (no significant halos detected)")
 
     console.print()
 

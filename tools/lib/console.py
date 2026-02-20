@@ -10,9 +10,10 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
+from rich.rule import Rule
 
 _is_tty = sys.stdout.isatty()
 
 console = Console(highlight=False, force_terminal=_is_tty, no_color=not _is_tty)
 
-__all__ = ["console", "Table", "Panel", "Text"]
+__all__ = ["console", "Table", "Panel", "Text", "Rule"]

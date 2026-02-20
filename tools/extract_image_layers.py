@@ -227,8 +227,15 @@ def main():
         "--scale", choices=["pixel", "smooth", "ai"], default="ai",
         help="Upscale method when --fill diffuse needs to resize (default: ai = Real-ESRGAN).",
     )
+    parser.add_argument(
+        "--fetch-model", action="store_true",
+        help="Allow downloading / updating HuggingFace models. By default, cached models are used offline.",
+    )
 
     args = parser.parse_args()
+
+    if not args.fetch_model:
+        os.environ["HF_HUB_OFFLINE"] = "1"
 
     if args.layers < 1:
         parser.error("Number of layers must be at least 1")
