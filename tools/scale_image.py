@@ -8,6 +8,7 @@ import sys
 
 import cv2
 
+from tools.lib.console import console
 from tools.lib.scale_utils import SCALE_MODES
 
 
@@ -31,7 +32,7 @@ def scale_image(input_path, output_path, factor, mode="pixel"):
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     cv2.imwrite(output_path, scaled)
-    print(f"{input_path} ({w}x{h}) -> {output_path} ({new_w}x{new_h}) [x{factor}, {mode}]")
+    console.print(f"{input_path} ([cyan]{w}x{h}[/cyan]) -> {output_path} ([cyan]{new_w}x{new_h}[/cyan]) [x{factor}, {mode}]")
 
 
 def collect_files(input_file, input_dir, prefix):
@@ -86,7 +87,7 @@ def main():
         scale_image(path, output, args.factor, mode=args.mode)
 
     if len(files) > 1:
-        print(f"\nDone — {len(files)} image(s) scaled.")
+        console.print(f"\nDone — {len(files)} image(s) scaled.")
 
 
 if __name__ == "__main__":

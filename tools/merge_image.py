@@ -9,6 +9,8 @@ import sys
 import cv2
 import numpy as np
 
+from tools.lib.console import console
+
 
 def merge(bg_path, fg_path, offset):
     """Merge a foreground image onto a background, saving over the foreground file."""
@@ -109,9 +111,9 @@ def main():
 
     for i, fg_path in enumerate(files, start=1):
         merge(args.background, fg_path, args.offset)
-        print(f"[{i}/{len(files)}] {fg_path}")
+        console.print(f"[{i}/{len(files)}] [bold]{fg_path}[/bold]")
 
-    print(f"\nDone — {len(files)} image(s) merged.")
+    console.print(f"\nDone — {len(files)} image(s) merged.")
 
 
 if __name__ == "__main__":

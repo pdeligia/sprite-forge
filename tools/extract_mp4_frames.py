@@ -9,6 +9,7 @@ import sys
 import cv2
 import numpy as np
 
+from tools.lib.console import console
 from tools.lib.video_utils import find_loop_segment
 
 
@@ -58,14 +59,14 @@ def extract_frames(input_path, n_frames, output_dir, prefix, suffix, region, wid
 
     # If --loop, find the best loop segment.
     if loop:
-        print(f"Scanning for loop in {t_start:.2f}s\u2013{t_end:.2f}s...")
+        console.print(f"Scanning for loop in {t_start:.2f}s–{t_end:.2f}s...")
         result = find_loop_segment(cap, t_start, t_end)
         if result is None:
             print("Error: could not find a suitable loop segment.", file=sys.stderr)
             sys.exit(1)
         t_start, t_end, score = result
         span = t_end - t_start
-        print(f"Best loop: {t_start:.2f}s \u2192 {t_end:.2f}s (score: {score:.3f})")
+        console.print(f"Best loop: {t_start:.2f}s → {t_end:.2f}s (score: {score:.3f})")
 
     # Calculate evenly-spaced timestamps within the time range.
     # In loop mode, exclude the end frame (it matches the start frame).
@@ -107,10 +108,10 @@ def extract_frames(input_path, n_frames, output_dir, prefix, suffix, region, wid
             frame = cv2.resize(frame, (out_w, out_h), interpolation=cv2.INTER_NEAREST)
 
         cv2.imwrite(out_file, frame)
-        print(f"[{i}/{n_frames}] {out_file} (t={ts:.2f}s)")
+        console.print(f"[{i}/{n_frames}] {out_file} ([dim]t={ts:.2f}s[/dim])")
 
     cap.release()
-    print(f"\nDone \u2014 {n_frames} frame(s) saved to {output_dir}/")
+    console.print(f"\nDone — {n_frames} frame(s) saved to {output_dir}/")
 
 
 def main():

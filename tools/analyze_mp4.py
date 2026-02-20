@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 from skimage.metrics import structural_similarity as ssim
 
+from tools.lib.console import console, Table, Panel
 from tools.lib.video_utils import find_loop_segment, sample_frames_ssim
 
 
@@ -141,7 +142,7 @@ def analyze_video(input_path, start, end, loop, region, width):
     # If --loop, find the best loop segment first.
     loop_info = None
     if loop:
-        print(f"Scanning for loop in {t_start:.2f}s–{t_end:.2f}s...")
+        console.print(f"Scanning for loop in {t_start:.2f}s–{t_end:.2f}s...")
         result = find_loop_segment(cap, t_start, t_end)
         if result is None:
             print("Error: could not find a suitable loop segment.", file=sys.stderr)
@@ -188,19 +189,25 @@ def analyze_video(input_path, start, end, loop, region, width):
     if start is not None or end is not None:
         seg_start = start if start is not None else 0.0
         seg_end = end if end is not None else duration
-        print(f"Video: {fname} ({fps:.0f}fps, {span:.1f}s segment [{t_start:.2f}s–{t_end:.2f}s], {native_frames_in_segment} native frames)")
+        header = f"{fname} ([cyan]{fps:.0f}fps[/cyan], {span:.1f}s segment [{t_start:.2f}s–{t_end:.2f}s], {native_frames_in_segment} native frames)"
     else:
-        print(f"Video: {fname} ({fps:.0f}fps, {span:.1f}s, {native_frames_in_segment} native frames)")
+        header = f"{fname} ([cyan]{fps:.0f}fps[/cyan], {span:.1f}s, {native_frames_in_segment} native frames)"
+    console.print(Panel(header, title="[bold]Video[/bold]", expand=False))
 
     if loop_info:
         ls, le, sc = loop_info
-        print(f"Best loop: {ls:.2f}s → {le:.2f}s (score: {sc:.3f}, {span:.1f}s segment, {native_frames_in_segment} native frames)")
+        console.print(f"Best loop: {ls:.2f}s → {le:.2f}s (score: {sc:.3f}, {span:.1f}s segment, {native_frames_in_segment} native frames)")
 
-    print(f"Motion level: {motion} (avg inter-frame SSIM: {avg_ssim:.2f})")
-    print(f"\nRecommended number of frames (N): {optimal_n}")
+    console.print(f"Motion level: [bold]{motion}[/bold] (avg inter-frame SSIM: {avg_ssim:.2f})")
+    console.print(f"\nRecommended number of frames (N): [bold]{optimal_n}[/bold]")
 
     # Print table.
-    print(f"\n  {'N':<6}{'fps':<7}{'Δ-SSIM':<9}{'Size est.':<12}Rating")
+    table = Table(box=None, padding=(0, 2))
+    table.add_column("N", justify="right")
+    table.add_column("fps", justify="right")
+    table.add_column("Δ-SSIM", justify="right")
+    table.add_column("Size est.", justify="right")
+    table.add_column("Rating")
     for idx, n in enumerate(tier_ns):
         eff_fps = n / span
         delta = compute_delta_ssim(samples, n, span)
@@ -215,26 +222,26 @@ def analyze_video(input_path, start, end, loop, region, width):
             label = ""
 
         size_str = f"~{size:.1f} MB"
-        print(f"  {n:<6}{eff_fps:<7.1f}{delta:<9.2f}{size_str:<12}{label}")
+        table.add_row(str(n), f"{eff_fps:.1f}", f"{delta:.2f}", size_str, label)
+    console.print(table)
 
     # Playback recommendations (when --loop is used).
     if loop_info:
         _, _, loop_score = loop_info
         time_per_frame = span / optimal_n
 
-        print(f"\nPlayback:")
-        print(f"  timePerFrame: {time_per_frame:.2f}s")
-
+        playback_lines = [f"timePerFrame: {time_per_frame:.2f}s"]
         if loop_score >= 0.98:
-            print(f"  Strategy: forward (loop score {loop_score:.3f} ≥ 0.98 — seamless)")
-            print(f"  Cycle: 1→2→…→N→1→… ({optimal_n} steps, {span:.2f}s per cycle)")
+            playback_lines.append(f"Strategy: forward (loop score {loop_score:.3f} ≥ 0.98 — seamless)")
+            playback_lines.append(f"Cycle: 1→2→…→N→1→… ({optimal_n} steps, {span:.2f}s per cycle)")
         else:
             ping_pong_steps = max(optimal_n * 2 - 2, optimal_n)
             ping_pong_duration = ping_pong_steps * time_per_frame
-            print(f"  Strategy: ping-pong (loop score {loop_score:.3f} < 0.98 — visible jump if forward-only)")
-            print(f"  Cycle: 1→2→…→N→…→2→1 ({ping_pong_steps} steps, {ping_pong_duration:.2f}s per cycle)")
+            playback_lines.append(f"Strategy: ping-pong (loop score {loop_score:.3f} < 0.98 — visible jump if forward-only)")
+            playback_lines.append(f"Cycle: 1→2→…→N→…→2→1 ({ping_pong_steps} steps, {ping_pong_duration:.2f}s per cycle)")
+        console.print(Panel("\n".join(playback_lines), title="[bold]Playback[/bold]", expand=False))
 
-    print()
+    console.print()
 
 
 def main():

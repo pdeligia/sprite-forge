@@ -10,14 +10,37 @@ import sys
 import cv2
 import numpy as np
 
+from tools.lib.console import console
 from tools.lib.depth_utils import compute_depth_map, get_device, load_depth_pipeline
 
 
-def split_layers(image, depth, n_layers, feather=0, clean_edges=0):
+def _remove_thin_features(mask, min_thickness=2):
+    """Remove features thinner than min_thickness pixels from a binary mask.
+
+    Uses morphological opening + reconstruction: erode to find 'core' regions
+    of thick content, then grow seeds back to fill original regions. Thin halos
+    (which vanish entirely under erosion) are removed.
+    """
+    from skimage.morphology import reconstruction
+    mask_u8 = mask.astype(np.uint8)
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, (min_thickness * 2 + 1, min_thickness * 2 + 1)
+    )
+    eroded = cv2.erode(mask_u8, kernel, iterations=1)
+    if eroded.any():
+        restored = reconstruction(eroded, mask_u8, method="dilation")
+        return restored.astype(bool)
+    # Everything was thin — return empty mask.
+    return np.zeros_like(mask)
+
+
+def split_layers(image, depth, n_layers, feather=0, clean_edges="off"):
     """Split an image into N depth layers using quantile-based thresholds.
 
     Uses quantiles so each layer gets roughly equal pixel coverage.
     Returns a list of RGBA images (back-to-front, layer 1 = farthest).
+
+    clean_edges: "off", "auto" (scales with image size), or int (erosion px).
     """
     h, w = image.shape[:2]
 
@@ -45,16 +68,38 @@ def split_layers(image, depth, n_layers, feather=0, clean_edges=0):
             mask = (depth >= lo) & (depth < hi)
         masks.append(mask)
 
-    # Clean edges: dilate front layers and subtract from back layers.
-    # This removes halo artifacts at depth boundaries.
-    if clean_edges > 0:
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
-                                           (clean_edges * 2 + 1, clean_edges * 2 + 1))
-        # Work back-to-front: each layer steals edge pixels from layers behind it.
-        for i in range(n_layers - 1, 0, -1):
-            dilated = cv2.dilate(masks[i].astype(np.uint8), kernel, iterations=1) > 0
-            for j in range(i):
-                masks[j] = masks[j] & ~dilated
+    # Clean edges: remove thin halo artifacts at depth boundaries.
+    # Erode each mask to find thick "core" regions, reconstruct them back to
+    # full size, and reassign orphaned halo pixels to the nearest real layer.
+    if clean_edges == "auto":
+        # Scale with image size: ~3px at 1024, ~5px at 2048, ~8px at 3072.
+        thickness = max(2, min(h, w) // 400)
+    elif clean_edges == "off":
+        thickness = 0
+    else:
+        thickness = int(clean_edges)
+
+    if thickness > 0:
+        from scipy.ndimage import distance_transform_edt
+        orphaned = np.zeros((h, w), dtype=bool)
+        for i in range(n_layers):
+            before = masks[i].copy()
+            masks[i] = _remove_thin_features(masks[i], thickness)
+            orphaned |= (before & ~masks[i])
+        # Reassign orphaned pixels to nearest layer (prefer front layers).
+        if orphaned.any():
+            best_dist = np.full((h, w), np.inf)
+            best_layer = np.full((h, w), -1, dtype=int)
+            for i in range(n_layers):
+                if not masks[i].any():
+                    continue
+                dist, _ = distance_transform_edt(~masks[i], return_indices=True)
+                bias = 1.0 - i * 0.01
+                closer = (dist * bias) < best_dist
+                best_dist[closer] = dist[closer] * bias
+                best_layer[closer] = i
+            for i in range(n_layers):
+                masks[i] = masks[i] | (orphaned & (best_layer == i))
 
     layers = []
     for i in range(n_layers):
@@ -126,7 +171,7 @@ def process_file(pipe, input_path, output_dir, n_layers, suffix, feather, clean_
         out_path = os.path.join(output_dir, out_name)
         cv2.imwrite(out_path, layer)
         label = layer_name_suffix(idx, n_layers)
-        print(f"  {out_path} ({label})")
+        console.print(f"  {out_path} ([dim]{label}[/dim])")
 
     if preview:
         name, _ = os.path.splitext(basename)
@@ -136,7 +181,7 @@ def process_file(pipe, input_path, output_dir, n_layers, suffix, feather, clean_
         depth_vis = (depth * 255).astype(np.uint8)
         depth_colored = cv2.applyColorMap(depth_vis, cv2.COLORMAP_INFERNO)
         cv2.imwrite(preview_path, depth_colored)
-        print(f"  {preview_path} (depth map)")
+        console.print(f"  {preview_path} ([dim]depth map[/dim])")
 
     return True
 
@@ -161,8 +206,8 @@ def main():
         help="Edge feather radius in pixels (0 = hard edges, default: 0)",
     )
     parser.add_argument(
-        "--clean-edges", type=int, default=0,
-        help="Remove halo artifacts at layer boundaries by N pixels (0 = off, try 3-5).",
+        "--clean-edges", default="off",
+        help="Remove halo artifacts: 'auto' (scales with image size), a number (erosion px), or 'off' (default).",
     )
     parser.add_argument("--preview", action="store_true", help="Output a depth map visualization")
     parser.add_argument(
@@ -189,6 +234,11 @@ def main():
         parser.error("Number of layers must be at least 1")
     if args.feather < 0:
         parser.error("Feather radius must be non-negative")
+    if args.clean_edges not in ("off", "auto"):
+        try:
+            int(args.clean_edges)
+        except ValueError:
+            parser.error("--clean-edges must be 'auto', 'off', or a number")
 
     # Collect input files.
     files = []
@@ -230,11 +280,11 @@ def main():
 
     count = 0
     for f in files:
-        print(f"[{count + 1}/{len(files)}] {os.path.basename(f)}:")
+        console.print(f"[{count + 1}/{len(files)}] [bold]{os.path.basename(f)}[/bold]:")
         if process_file(pipe, f, args.output_dir, args.layers, args.suffix, args.feather, args.clean_edges, args.preview, args.fill, inpaint_model, inpaint_device, args.scale):
             count += 1
 
-    print(f"\nDone — {count} image(s) split into {args.layers} layers each → {args.output_dir}/")
+    console.print(f"\nDone — {count} image(s) split into {args.layers} layers each → {args.output_dir}/")
 
 
 if __name__ == "__main__":

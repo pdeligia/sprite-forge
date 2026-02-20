@@ -8,6 +8,8 @@ import sys
 import cv2
 import numpy as np
 
+from tools.lib.console import console
+
 
 def generate_video(output_path, width, height, duration, fps, color):
     """Generate a solid-color MP4 video."""
@@ -26,7 +28,7 @@ def generate_video(output_path, width, height, duration, fps, color):
         writer.write(frame)
 
     writer.release()
-    print(f"Generated {output_path} ({width}x{height}, {duration}s, {fps}fps, {total_frames} frames)")
+    console.print(f"Generated {output_path} ([cyan]{width}x{height}[/cyan], {duration}s, {fps}fps, {total_frames} frames)")
 
 
 def parse_color(value):
