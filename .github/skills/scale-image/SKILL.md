@@ -5,7 +5,7 @@ description: Scale an image up or down by a given factor. Use this skill when th
 
 # scale-image
 
-A Python tool for scaling images by a given factor.
+A Python tool for scaling images by a given factor, with multiple scaling methods.
 
 ## How to Run
 ```bash
@@ -24,13 +24,23 @@ uv run scale-image <factor> [options]
 | `--input-dir DIR` | none | Directory of images to scale |
 | `--prefix PREFIX` | (empty) | Filter images by filename prefix (only with `--input-dir`) |
 | `--output PATH` | (overwrites input) | Output file path (single file mode only) |
+| `--mode MODE` | `pixel` | Scaling method: `pixel`, `smooth`, or `ai` |
 
 Must provide either `--input` or `--input-dir` (not both).
 
+## Modes
+
+### `pixel` (default)
+Nearest-neighbor upscaling / area downscaling. Preserves sharp pixel edges — ideal for pixel art.
+
+### `smooth`
+Lanczos interpolation. Produces smooth results — good for photos and illustrated art.
+
+### `ai`
+Real-ESRGAN AI super-resolution. Best quality for upscaling painted/illustrated art and SVD output. Model weights (~64MB) auto-download on first use. Supports 2x and 4x native scales.
+
 ## Behavior
-- Downscaling (factor < 1) uses `INTER_AREA` interpolation (best quality for shrinking)
-- Upscaling (factor > 1) uses `INTER_NEAREST` interpolation (preserves sharp pixel edges for pixel art)
-- Supports RGB and RGBA images
+- Supports RGB and RGBA images (alpha is scaled separately in `ai` mode)
 - If no `--output` is given, the input file is overwritten
 
 ## Examples
@@ -43,6 +53,16 @@ uv run scale-image 0.333333 --input bg@3x.png --output bg@1x.png
 ### Scale up 2x for pixel art
 ```bash
 uv run scale-image 2.0 --input sprite.png --output sprite@2x.png
+```
+
+### Smooth upscale for photos
+```bash
+uv run scale-image 2.0 --input photo.png --output photo_2x.png --mode smooth
+```
+
+### AI upscale for illustrated art
+```bash
+uv run scale-image 4.0 --input scene.png --output scene_4x.png --mode ai
 ```
 
 ### Scale all images with a prefix in a directory

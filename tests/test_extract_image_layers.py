@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for split_image_layers tool."""
+"""Tests for extract_image_layers tool."""
 
 import os
 import subprocess
@@ -11,7 +11,7 @@ import numpy as np
 
 
 TOOLS_DIR = os.path.join(os.path.dirname(__file__), "..", "tools")
-SPLIT = os.path.join(TOOLS_DIR, "split_image_layers.py")
+SPLIT = os.path.join(TOOLS_DIR, "extract_image_layers.py")
 
 
 def run_tool(args):

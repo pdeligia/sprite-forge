@@ -149,6 +149,34 @@ def test_batch_with_prefix():
         assert img.shape[1] == 200, f"other_01 should be untouched: {img.shape}"
 
 
+def test_mode_pixel():
+    """--mode pixel uses nearest-neighbor (default behavior)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = os.path.join(tmpdir, "src.png")
+        dst = os.path.join(tmpdir, "dst.png")
+        make_image(src, 32, 24, (0, 255, 0))
+
+        result = run_tool([SCALE_IMAGE, "3.0", "--input", src, "--output", dst, "--mode", "pixel"])
+        assert result.returncode == 0, f"scale_image failed: {result.stderr}"
+
+        img = cv2.imread(dst)
+        assert img.shape[1] == 96 and img.shape[0] == 72, f"Unexpected dimensions: {img.shape}"
+
+
+def test_mode_smooth():
+    """--mode smooth uses Lanczos interpolation."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = os.path.join(tmpdir, "src.png")
+        dst = os.path.join(tmpdir, "dst.png")
+        make_image(src, 32, 24, (0, 255, 0))
+
+        result = run_tool([SCALE_IMAGE, "2.0", "--input", src, "--output", dst, "--mode", "smooth"])
+        assert result.returncode == 0, f"scale_image failed: {result.stderr}"
+
+        img = cv2.imread(dst)
+        assert img.shape[1] == 64 and img.shape[0] == 48, f"Unexpected dimensions: {img.shape}"
+
+
 if __name__ == "__main__":
     tests = [
         test_scale_down,
@@ -159,6 +187,8 @@ if __name__ == "__main__":
         test_invalid_factor,
         test_batch_all,
         test_batch_with_prefix,
+        test_mode_pixel,
+        test_mode_smooth,
     ]
     failed = 0
     for test in tests:

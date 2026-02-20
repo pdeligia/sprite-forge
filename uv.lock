@@ -587,6 +587,23 @@ wheels = [
 ]
 
 [[package]]
+name = "py-real-esrgan"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "numpy" },
+    { name = "opencv-python" },
+    { name = "pillow" },
+    { name = "torch" },
+    { name = "torchvision" },
+    { name = "tqdm" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/36/cd/928f22d14f87e03061785e0929184ba433b1ac6aae958ed67c5d9ab034fd/py_real_esrgan-2.0.0-py3-none-any.whl", hash = "sha256:5667e58c416761a1f0fa3fc09c2ec2605379d732ef0fe465bf986d2ccc218a78", size = 11860, upload-time = "2024-04-15T18:18:22.547Z" },
+]
+
+[[package]]
 name = "pygments"
 version = "2.19.2"
 source = { registry = "https://pypi.org/simple" }
@@ -863,18 +880,18 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "opencv-python" },
+    { name = "py-real-esrgan" },
     { name = "scikit-image" },
     { name = "torch" },
-    { name = "torchvision" },
     { name = "transformers" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "opencv-python", specifier = ">=4.13.0.92" },
+    { name = "py-real-esrgan", specifier = ">=2.0.0" },
     { name = "scikit-image", specifier = ">=0.26.0" },
     { name = "torch", specifier = ">=2.10.0" },
-    { name = "torchvision", specifier = ">=0.25.0" },
     { name = "transformers", specifier = ">=5.2.0" },
 ]
 

@@ -8,20 +8,20 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "opencv-python>=4.13.0.92",
+    "py-real-esrgan>=2.0.0",
     "scikit-image>=0.26.0",
     "torch>=2.10.0",
-    "torchvision>=0.25.0",
     "transformers>=5.2.0",
 ]
 
 [project.scripts]
 analyze-image = "tools.analyze_image:main"
 analyze-mp4 = "tools.analyze_mp4:main"
+extract-mp4-frames = "tools.extract_mp4_frames:main"
 gen-mp4 = "tools.gen_mp4:main"
 merge-image = "tools.merge_image:main"
-extract-mp4-frames = "tools.extract_mp4_frames:main"
 scale-image = "tools.scale_image:main"
-split-image-layers = "tools.split_image_layers:main"
+extract-image-layers = "tools.extract_image_layers:main"
 
 [build-system]
 requires = ["hatchling"]

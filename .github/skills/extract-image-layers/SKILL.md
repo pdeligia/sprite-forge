@@ -1,15 +1,15 @@
 ---
-name: split-image-layers
-description: Split an image into N depth layers using Depth Anything V2 AI model. Use this skill when the user wants to create parallax layers from a single image for 2D game backgrounds.
+name: extract-image-layers
+description: Extract depth layers from a single image using Depth Anything V2 AI model. Use this skill when the user wants to create parallax layers from a single image for 2D game backgrounds.
 ---
 
-# split-image-layers
+# extract-image-layers
 
-A Python tool that splits an image into N depth layers using Depth Anything V2 (monocular depth estimation), producing RGBA PNGs with transparency for parallax scrolling in games.
+A Python tool that extracts N depth layers from an image using Depth Anything V2 (monocular depth estimation), producing RGBA PNGs with transparency for parallax scrolling in games.
 
 ## How to Run
 ```bash
-uv run split-image-layers --input <image.png> [options]
+uv run extract-image-layers --input <image.png> [options]
 ```
 
 ## Input Modes
@@ -22,8 +22,8 @@ uv run split-image-layers --input <image.png> [options]
 ## Options
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--layers N` | 3 | Number of depth layers to split into |
-| `--output-dir DIR` | `./tmp/split_image_layers` | Output directory (nuked and recreated each run) |
+| `--layers N` | 3 | Number of depth layers to extract |
+| `--output-dir DIR` | `./tmp/extract_image_layers` | Output directory (nuked and recreated each run) |
 | `--suffix SUFFIX` | (empty) | Filename suffix to preserve (e.g., `@3x`) — layer number is inserted before it |
 | `--feather F` | 0 | Edge feather radius in pixels (Gaussian blur, 0 = hard edges) |
 | `--preview` | off | Also output a depth map visualization (INFERNO colormap) |
@@ -53,23 +53,23 @@ Layer number is inserted before the suffix. Given input `forest_dungeon_bg_01@3x
 
 ## Examples
 
-### Split a single image into 3 layers
+### Extract 3 depth layers from a single image
 ```bash
-uv run split-image-layers --input scene@3x.png --layers 3 --suffix "@3x"
+uv run extract-image-layers --input scene@3x.png --layers 3 --suffix "@3x"
 ```
 
-### Split with feathered edges and depth preview
+### Extract with feathered edges and depth preview
 ```bash
-uv run split-image-layers --input scene.png --layers 3 --feather 5 --preview
+uv run extract-image-layers --input scene.png --layers 3 --feather 5 --preview
 ```
 
 ### Use large model for best accuracy
 ```bash
-uv run split-image-layers --input scene.png --layers 4 --model large --preview
+uv run extract-image-layers --input scene.png --layers 4 --model large --preview
 ```
 
-### Batch split all frames from extract-mp4-frames
+### Batch extract all frames from extract-mp4-frames
 ```bash
-uv run split-image-layers --input-dir ./tmp/extract_mp4_frames \
+uv run extract-image-layers --input-dir ./tmp/extract_mp4_frames \
   --prefix forest_dungeon_bg --layers 3 --suffix "@3x"
 ```
