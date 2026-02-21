@@ -1,15 +1,15 @@
 ---
-name: extract-image-layers
-description: Extract depth layers from a single image using Depth Anything V2 AI model. Use this skill when the user wants to create parallax layers from a single image for 2D game backgrounds.
+name: image-to-layers
+description: Split a single image into depth layers using Depth Anything V2 AI model. Use this skill when the user wants to create parallax layers from a single image for 2D game backgrounds.
 ---
 
-# extract-image-layers
+# image-to-layers
 
-A Python tool that extracts N depth layers from an image using Depth Anything V2 (monocular depth estimation), producing RGBA PNGs with transparency for parallax scrolling in games.
+A Python tool that splits an image into N depth layers using Depth Anything V2 (monocular depth estimation), producing RGBA PNGs with transparency for parallax scrolling in games.
 
 ## How to Run
 ```bash
-uv run extract-image-layers --input <image.png> [options]
+uv run image-to-layers --input <image.png> [options]
 ```
 
 ## Input Modes
@@ -23,12 +23,14 @@ uv run extract-image-layers --input <image.png> [options]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--layers N` | 3 | Number of depth layers to extract |
-| `--output-dir DIR` | `./tmp/extract_image_layers` | Output directory (nuked and recreated each run) |
+| `--output-dir DIR` | `./tmp/image_to_layers` | Output directory (nuked and recreated each run) |
 | `--suffix SUFFIX` | (empty) | Filename suffix to preserve (e.g., `@3x`) — layer number is inserted before it |
 | `--feather F` | 0 | Edge feather radius in pixels (Gaussian blur, 0 = hard edges) |
-| `--preview` | off | Also output a depth map visualization (INFERNO colormap) |
+| `--clean-edges VALUE` | `off` | Remove outline artifacts: erosion radius in pixels, or `off`. Use `analyze-image --depth` to find recommended value |
+| `--depth-map` | off | Also output a depth map visualization (INFERNO colormap) |
 | `--model SIZE` | `small` | Depth model size: `small` (~25 MB, fast), `base` (~100 MB), `large` (~350 MB, best) |
 | `--no-model` | off | Skip AI model, use vertical gradient fallback (for testing/CI) |
+| `--fetch-latest-model` | off | Force re-download HuggingFace models to get the latest version |
 
 ## Output Naming
 Layer number is inserted before the suffix. Given input `forest_dungeon_bg_01@3x.png` with `--suffix "@3x"`:
@@ -47,29 +49,30 @@ Layer number is inserted before the suffix. Given input `forest_dungeon_bg_01@3x
 - The `--model` flag selects the Depth Anything V2 variant. `small` is fast and good for most use cases; `large` gives better accuracy for complex scenes.
 - Use `--no-model` for testing and CI — it replaces the AI model with a simple vertical gradient.
 - The output directory is wiped clean before each run.
-- Use `--preview` to see the computed depth map and verify layer boundaries.
+- Use `--depth-map` to see the computed depth map and verify layer boundaries.
 - Use `--feather` to soften hard edges between layers (recommended: 3–10 pixels).
+- Use `--clean-edges` to remove thin outline artifacts at layer boundaries.
 - Auto-detects MPS (Metal) on Mac for GPU acceleration.
 
 ## Examples
 
-### Extract 3 depth layers from a single image
+### Split into 3 depth layers
 ```bash
-uv run extract-image-layers --input scene@3x.png --layers 3 --suffix "@3x"
+uv run image-to-layers --input scene@3x.png --layers 3 --suffix "@3x"
 ```
 
-### Extract with feathered edges and depth preview
+### With feathered edges and depth map preview
 ```bash
-uv run extract-image-layers --input scene.png --layers 3 --feather 5 --preview
+uv run image-to-layers --input scene.png --layers 3 --feather 5 --depth-map
 ```
 
 ### Use large model for best accuracy
 ```bash
-uv run extract-image-layers --input scene.png --layers 4 --model large --preview
+uv run image-to-layers --input scene.png --layers 4 --model large --depth-map
 ```
 
-### Batch extract all frames from extract-mp4-frames
+### Batch split all frames from mp4-to-frames
 ```bash
-uv run extract-image-layers --input-dir ./tmp/extract_mp4_frames \
+uv run image-to-layers --input-dir ./tmp/mp4_to_frames \
   --prefix forest_dungeon_bg --layers 3 --suffix "@3x"
 ```

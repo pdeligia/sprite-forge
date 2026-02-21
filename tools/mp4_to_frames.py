@@ -120,7 +120,7 @@ def main():
     )
     parser.add_argument("input", help="Path to the input MP4 video")
     parser.add_argument("n", type=int, help="Number of frames to extract")
-    parser.add_argument("--output-dir", default="./tmp/extract_mp4_frames", help="Output directory (default: ./tmp/extract_mp4_frames)")
+    parser.add_argument("--output-dir", default="./tmp/mp4_to_frames", help="Output directory (default: ./tmp/mp4_to_frames)")
     parser.add_argument("--prefix", default="frame", help="Filename prefix (default: frame)")
     parser.add_argument("--suffix", default="", help="Filename suffix before .png (e.g., @3x)")
     parser.add_argument(

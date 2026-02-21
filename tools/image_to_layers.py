@@ -10,28 +10,23 @@ import sys
 import cv2
 import numpy as np
 
-from tools.lib.console import console
-from tools.lib.depth_utils import compute_depth_map, get_device, load_depth_pipeline
+from tools.lib.console import console, enable_hf_offline
+from tools.lib.depth_utils import compute_depth_map, load_depth_pipeline
 
 
 def _remove_thin_features(mask, min_thickness=2):
     """Remove features thinner than min_thickness pixels from a binary mask.
 
-    Uses morphological opening + reconstruction: erode to find 'core' regions
-    of thick content, then grow seeds back to fill original regions. Thin halos
-    (which vanish entirely under erosion) are removed.
+    Uses morphological opening (erode + dilate): thin features vanish under
+    erosion and don't come back after dilation. Thick regions erode then
+    dilate back to approximately their original shape.
     """
-    from skimage.morphology import reconstruction
     mask_u8 = mask.astype(np.uint8)
     kernel = cv2.getStructuringElement(
         cv2.MORPH_ELLIPSE, (min_thickness * 2 + 1, min_thickness * 2 + 1)
     )
-    eroded = cv2.erode(mask_u8, kernel, iterations=1)
-    if eroded.any():
-        restored = reconstruction(eroded, mask_u8, method="dilation")
-        return restored.astype(bool)
-    # Everything was thin — return empty mask.
-    return np.zeros_like(mask)
+    opened = cv2.morphologyEx(mask_u8, cv2.MORPH_OPEN, kernel)
+    return opened.astype(bool)
 
 
 def split_layers(image, depth, n_layers, feather=0, clean_edges="off"):
@@ -40,7 +35,7 @@ def split_layers(image, depth, n_layers, feather=0, clean_edges="off"):
     Uses quantiles so each layer gets roughly equal pixel coverage.
     Returns a list of RGBA images (back-to-front, layer 1 = farthest).
 
-    clean_edges: "off", "auto" (scales with image size), or int (erosion px).
+    clean_edges: "off" or int (erosion px).
     """
     h, w = image.shape[:2]
 
@@ -68,13 +63,10 @@ def split_layers(image, depth, n_layers, feather=0, clean_edges="off"):
             mask = (depth >= lo) & (depth < hi)
         masks.append(mask)
 
-    # Clean edges: remove thin halo artifacts at depth boundaries.
-    # Erode each mask to find thick "core" regions, reconstruct them back to
-    # full size, and reassign orphaned halo pixels to the nearest real layer.
-    if clean_edges == "auto":
-        # Scale with image size: ~3px at 1024, ~5px at 2048, ~8px at 3072.
-        thickness = max(2, min(h, w) // 400)
-    elif clean_edges == "off":
+    # Clean edges: remove thin outline artifacts at depth boundaries.
+    # Use morphological opening to remove thin features, then reassign
+    # orphaned pixels to the nearest real layer.
+    if clean_edges == "off":
         thickness = 0
     else:
         thickness = int(clean_edges)
@@ -148,7 +140,7 @@ def derive_output_name(input_basename, layer_idx, n_layers, suffix, pad):
     return f"{name}_layer_{layer_num}{suffix}{ext}"
 
 
-def process_file(pipe, input_path, output_dir, n_layers, suffix, feather, clean_edges, preview, fill_mode=None, inpaint_model=None, device="cpu", scale_mode="ai"):
+def process_file(pipe, input_path, output_dir, n_layers, suffix, feather, clean_edges, depth_map):
     """Split a single image into layers and save them."""
     image = cv2.imread(input_path, cv2.IMREAD_UNCHANGED)
     if image is None:
@@ -157,11 +149,6 @@ def process_file(pipe, input_path, output_dir, n_layers, suffix, feather, clean_
 
     depth = compute_depth_map(pipe, image)
     layers = split_layers(image, depth, n_layers, feather, clean_edges)
-
-    # Inpaint transparent regions back-to-front if requested.
-    if fill_mode is not None:
-        from tools.lib.fill_utils import fill_layers_back_to_front
-        layers = fill_layers_back_to_front(layers, mode=fill_mode, model=inpaint_model, device=device, scale_mode=scale_mode)
 
     pad = max(2, len(str(n_layers)))
     basename = os.path.basename(input_path)
@@ -173,7 +160,7 @@ def process_file(pipe, input_path, output_dir, n_layers, suffix, feather, clean_
         label = layer_name_suffix(idx, n_layers)
         console.print(f"  {out_path} ([dim]{label}[/dim])")
 
-    if preview:
+    if depth_map:
         name, _ = os.path.splitext(basename)
         if suffix and name.endswith(suffix):
             name = name[: -len(suffix)]
@@ -197,8 +184,8 @@ def main():
 
     parser.add_argument("--layers", type=int, default=3, help="Number of layers (default: 3)")
     parser.add_argument(
-        "--output-dir", default="./tmp/extract_image_layers",
-        help="Output directory (default: ./tmp/extract_image_layers)",
+        "--output-dir", default="./tmp/image_to_layers",
+        help="Output directory (default: ./tmp/image_to_layers)",
     )
     parser.add_argument("--suffix", default="", help="Filename suffix to preserve (e.g., @3x)")
     parser.add_argument(
@@ -207,9 +194,9 @@ def main():
     )
     parser.add_argument(
         "--clean-edges", default="off",
-        help="Remove halo artifacts: 'auto' (scales with image size), a number (erosion px), or 'off' (default).",
+        help="Remove outline artifacts: an erosion radius in pixels, or 'off' (default). Use analyze-image --depth to find the recommended value.",
     )
-    parser.add_argument("--preview", action="store_true", help="Output a depth map visualization")
+    parser.add_argument("--depth-map", action="store_true", help="Output a depth map visualization")
     parser.add_argument(
         "--model", choices=["small", "base", "large"], default="small",
         help="Depth Anything V2 model size (default: small). Larger = better quality, slower.",
@@ -219,33 +206,25 @@ def main():
         help="Skip depth model, use vertical gradient fallback (for testing/CI).",
     )
     parser.add_argument(
-        "--fill", nargs="?", const="spread", default=None,
-        choices=["spread", "inpaint", "diffuse"],
-        help="Fill transparent regions: spread (fast edge-extend, default), inpaint (LaMa AI), or diffuse (Stable Diffusion).",
+        "--fetch-latest-model", action="store_true",
+        help="Force re-download HuggingFace models to get the latest version.",
     )
-    parser.add_argument(
-        "--scale", choices=["pixel", "smooth", "ai"], default="ai",
-        help="Upscale method when --fill diffuse needs to resize (default: ai = Real-ESRGAN).",
-    )
-    parser.add_argument(
-        "--fetch-model", action="store_true",
-        help="Allow downloading / updating HuggingFace models. By default, cached models are used offline.",
-    )
-
     args = parser.parse_args()
 
-    if not args.fetch_model:
-        os.environ["HF_HUB_OFFLINE"] = "1"
+    if not args.fetch_latest_model:
+        enable_hf_offline()
 
     if args.layers < 1:
         parser.error("Number of layers must be at least 1")
     if args.feather < 0:
         parser.error("Feather radius must be non-negative")
-    if args.clean_edges not in ("off", "auto"):
+    if args.clean_edges != "off":
         try:
-            int(args.clean_edges)
+            val = int(args.clean_edges)
+            if val < 1:
+                parser.error("--clean-edges must be a positive integer")
         except ValueError:
-            parser.error("--clean-edges must be 'auto', 'off', or a number")
+            parser.error("--clean-edges must be 'off' or a positive integer")
 
     # Collect input files.
     files = []
@@ -273,22 +252,10 @@ def main():
     # Load the depth model once, reuse for all files.
     pipe = None if args.no_model else load_depth_pipeline(args.model)
 
-    # Load fill model if needed.
-    inpaint_model = None
-    inpaint_device = "cpu"
-    if args.fill == "inpaint":
-        from tools.lib.fill_utils import load_lama_model
-        inpaint_device = get_device()
-        inpaint_model = load_lama_model(device=inpaint_device)
-    elif args.fill == "diffuse":
-        from tools.lib.fill_utils import load_sd_inpaint_pipeline
-        inpaint_device = get_device()
-        inpaint_model = load_sd_inpaint_pipeline(device=inpaint_device)
-
     count = 0
     for f in files:
         console.print(f"[{count + 1}/{len(files)}] [bold]{os.path.basename(f)}[/bold]:")
-        if process_file(pipe, f, args.output_dir, args.layers, args.suffix, args.feather, args.clean_edges, args.preview, args.fill, inpaint_model, inpaint_device, args.scale):
+        if process_file(pipe, f, args.output_dir, args.layers, args.suffix, args.feather, args.clean_edges, args.depth_map):
             count += 1
 
     console.print(f"\nDone — {count} image(s) split into {args.layers} layers each → {args.output_dir}/")

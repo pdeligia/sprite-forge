@@ -17,18 +17,28 @@ def scale_smooth(img, new_w, new_h, factor):
 
 
 def scale_ai(img, new_w, new_h, factor):
-    """Scale using Real-ESRGAN AI super-resolution (py-real-esrgan package)."""
+    """Scale using Real-ESRGAN AI super-resolution."""
     import torch
     from PIL import Image
-    from RealESRGAN import RealESRGAN
+    from huggingface_hub import hf_hub_download
+    from py_real_esrgan.rrdbnet_arch import RRDBNet
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Choose model scale: 2x or 4x.
     net_scale = 2 if factor <= 2 else 4
+    num_block = 23 if net_scale == 4 else 16
 
-    model = RealESRGAN(device, scale=net_scale)
-    model.load_weights(f"weights/RealESRGAN_x{net_scale}.pth", download=True)
+    model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64,
+                    num_block=num_block, num_grow_ch=32, scale=net_scale)
+    from tools.lib.console import run_with_hf_fallback
+    weights_path = run_with_hf_fallback(
+        hf_hub_download,
+        repo_id="sberbank-ai/Real-ESRGAN",
+        filename=f"RealESRGAN_x{net_scale}.pth",
+    )
+    model.load_state_dict(torch.load(weights_path, map_location=device))
+    model.eval().to(device)
 
     # Handle alpha channel separately — ESRGAN only works on RGB.
     has_alpha = len(img.shape) == 3 and img.shape[2] == 4
@@ -38,14 +48,16 @@ def scale_ai(img, new_w, new_h, factor):
     else:
         bgr = img
 
-    # Convert BGR → RGB → PIL for the model.
-    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-    pil_img = Image.fromarray(rgb)
+    # BGR → RGB, normalize to [0, 1], to tensor (1, 3, H, W).
+    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+    tensor = torch.from_numpy(rgb).permute(2, 0, 1).unsqueeze(0).to(device)
 
-    result = model.predict(pil_img)
+    with torch.no_grad():
+        output_tensor = model(tensor)
 
-    # Convert back to BGR numpy array.
-    output = cv2.cvtColor(np.array(result), cv2.COLOR_RGB2BGR)
+    # Back to numpy BGR.
+    out = output_tensor.squeeze(0).permute(1, 2, 0).clamp(0, 1).cpu().numpy()
+    output = cv2.cvtColor((out * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
 
     if has_alpha:
         alpha_up = cv2.resize(alpha, (output.shape[1], output.shape[0]),
@@ -64,16 +76,3 @@ SCALE_MODES = {
     "smooth": scale_smooth,
     "ai": scale_ai,
 }
-
-
-def upscale(img, target_w, target_h, mode="ai"):
-    """Upscale an image to target dimensions using the specified mode.
-
-    Convenience wrapper for use by other tools.
-    """
-    h, w = img.shape[:2]
-    if w == target_w and h == target_h:
-        return img
-    factor = target_w / w
-    scale_fn = SCALE_MODES.get(mode, scale_smooth)
-    return scale_fn(img, target_w, target_h, factor)

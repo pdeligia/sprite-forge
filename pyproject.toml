@@ -7,8 +7,6 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "accelerate>=1.0.0",
-    "diffusers>=0.30.0",
     "opencv-python>=4.13.0.92",
     "py-real-esrgan>=2.0.0",
     "rich>=14.0.0",
@@ -20,11 +18,13 @@ dependencies = [
 [project.scripts]
 analyze-image = "tools.analyze_image:main"
 analyze-mp4 = "tools.analyze_mp4:main"
-extract-mp4-frames = "tools.extract_mp4_frames:main"
+mp4-to-frames = "tools.mp4_to_frames:main"
+frames-to-mp4 = "tools.frames_to_mp4:main"
 gen-mp4 = "tools.gen_mp4:main"
+image-to-layers = "tools.image_to_layers:main"
 merge-image = "tools.merge_image:main"
+remix-animation = "tools.remix_animation:main"
 scale-image = "tools.scale_image:main"
-extract-image-layers = "tools.extract_image_layers:main"
 
 [build-system]
 requires = ["hatchling"]

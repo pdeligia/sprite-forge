@@ -5,11 +5,12 @@ import argparse
 import os
 import re
 import sys
+import warnings
 
 import cv2
 import numpy as np
 
-from tools.lib.console import console, Table, Rule, Panel
+from tools.lib.console import console, Table, Rule, Panel, enable_hf_offline, run_with_hf_fallback
 
 
 def format_size(bytes_val):
@@ -93,7 +94,11 @@ def analyze_depth(image, model_size):
     }
     model_name = model_map[model_size]
     print(f"Loading {model_name} on {device}...", file=sys.stderr)
-    pipe = hf_pipeline(task="depth-estimation", model=model_name, device=device)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=".*fast processor.*")
+        pipe = run_with_hf_fallback(
+            hf_pipeline, task="depth-estimation", model=model_name, device=device, use_fast=True,
+        )
 
     rgb = cv2.cvtColor(image[:, :, :3], cv2.COLOR_BGR2RGB)
     pil_img = PILImage.fromarray(rgb)
@@ -148,7 +153,7 @@ def analyze_depth(image, model_size):
             layer_info.append((lo, hi, pct))
         stats["layer_table"].append((n, layer_info))
 
-    # Halo analysis: measure the actual thickness of each thin fragment
+    # Outline analysis: measure the actual thickness of each thin fragment
     # at layer boundaries and recommend a --clean-edges value.
     rec_n = stats["recommended_layers"]
     thresholds = [np.percentile(depth.flatten(), 100.0 * i / rec_n) for i in range(rec_n + 1)]
@@ -163,77 +168,84 @@ def analyze_depth(image, model_size):
 
     from scipy.ndimage import distance_transform_edt
 
-    # For each layer, find fragments that vanish under erosion (halos)
+    # For each layer, find fragments that vanish under erosion (outlines)
     # and measure their thickness via distance transform.
-    max_radius = 12
+    max_radius = 25
     kernel_max = cv2.getStructuringElement(
         cv2.MORPH_ELLIPSE, (max_radius * 2 + 1, max_radius * 2 + 1)
     )
-    halo_thicknesses = []  # One thickness per halo fragment.
-    total_halo_pixels = 0
+    outline_thicknesses = []  # One thickness per outline fragment.
+    total_outline_pixels = 0
     for m in masks:
         m_u8 = m.astype(np.uint8)
         eroded = cv2.erode(m_u8, kernel_max, iterations=1)
-        # Halo pixels = those in original mask but not surviving max erosion+reconstruction.
+        # Outline pixels = those in original mask but not surviving max erosion+reconstruction.
         if eroded.any():
             from skimage.morphology import reconstruction
             restored = reconstruction(eroded, m_u8, method="dilation").astype(np.uint8)
-            halo_mask = m_u8 - restored
+            outline_mask = m_u8 - restored
         else:
-            halo_mask = m_u8.copy()
+            outline_mask = m_u8.copy()
 
-        if halo_mask.sum() == 0:
+        if outline_mask.sum() == 0:
             continue
 
-        total_halo_pixels += int(halo_mask.sum())
+        total_outline_pixels += int(outline_mask.sum())
 
-        # Label each halo fragment and measure its max thickness.
-        n_labels, labels, _, _ = cv2.connectedComponentsWithStats(halo_mask, connectivity=8)
+        # Label each outline fragment and measure its max thickness.
+        n_labels, labels, _, _ = cv2.connectedComponentsWithStats(outline_mask, connectivity=8)
         for label in range(1, n_labels):
             fragment = (labels == label).astype(np.uint8)
             # Distance transform: max distance from edge = half-thickness.
             dist = distance_transform_edt(fragment)
             thickness = int(np.ceil(dist.max() * 2))
             thickness = max(1, thickness)
-            halo_thicknesses.append(thickness)
+            outline_thicknesses.append(thickness)
 
     # Build distribution.
-    halo_stats = {}
-    halo_stats["total_fragments"] = len(halo_thicknesses)
-    halo_stats["total_pixels"] = total_halo_pixels
-    halo_stats["pct_of_image"] = total_halo_pixels / depth.size * 100
+    outline_stats = {}
+    outline_stats["total_fragments"] = len(outline_thicknesses)
+    outline_stats["total_pixels"] = total_outline_pixels
+    outline_stats["pct_of_image"] = total_outline_pixels / depth.size * 100
 
-    if halo_thicknesses:
-        arr = np.array(halo_thicknesses)
-        halo_stats["min"] = int(arr.min())
-        halo_stats["max"] = int(arr.max())
-        halo_stats["median"] = int(np.median(arr))
-        # Distribution: what % of halos are caught at each radius.
+    if outline_thicknesses:
+        arr = np.array(outline_thicknesses)
+        outline_stats["min"] = int(arr.min())
+        outline_stats["max"] = int(arr.max())
+        outline_stats["median"] = int(np.median(arr))
+        # Distribution: what % of outlines are caught at each radius.
+        max_t = int(arr.max())
+        radii = sorted(set([1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, max_t]))
         coverage = []
-        for r in sorted(set([1, 2, 3, 4, 5, 6, 8, 10])):
+        for r in radii:
             caught = int((arr <= r).sum())
             pct = caught / len(arr) * 100
             coverage.append((r, caught, pct))
-        halo_stats["coverage"] = coverage
+            if pct >= 100.0:
+                break
+        outline_stats["coverage"] = coverage
 
-        # Recommend radius that catches ≥90% of halos.
+        # Recommend radius that catches ≥90% of outlines.
         recommended_radius = int(arr.max())  # Fallback: catch all.
         for r, _, pct in coverage:
             if pct >= 90.0:
                 recommended_radius = r
                 break
     else:
-        halo_stats["coverage"] = []
+        outline_stats["coverage"] = []
         recommended_radius = 0
 
-    stats["halo_analysis"] = halo_stats
+    stats["outline_analysis"] = outline_stats
     stats["recommended_clean_edges"] = recommended_radius
 
     return stats
 
 
 def analyze_description(image):
-    """Generate a detailed description of the image using Qwen2-VL."""
+    """Generate detailed and short descriptions of the image using Qwen2-VL.
+
+    Returns (detailed, short) tuple of strings.
+    """
     from PIL import Image as PILImage
     from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
     import torch
@@ -243,35 +255,47 @@ def analyze_description(image):
     print(f"Loading {model_name} on {device}...", file=sys.stderr)
 
     dtype = torch.float32 if device == "mps" else torch.float16
-    # Cap image to 512×512 — enough detail for description, saves memory.
-    processor = AutoProcessor.from_pretrained(
+    processor = run_with_hf_fallback(
+        AutoProcessor.from_pretrained,
         model_name, min_pixels=128 * 128, max_pixels=256 * 256, use_fast=False,
     )
-    model = Qwen2VLForConditionalGeneration.from_pretrained(
+    model = run_with_hf_fallback(
+        Qwen2VLForConditionalGeneration.from_pretrained,
         model_name, torch_dtype=dtype,
     ).to(device)
 
     rgb = cv2.cvtColor(image[:, :, :3], cv2.COLOR_BGR2RGB)
     pil_img = PILImage.fromarray(rgb)
 
-    prompt = (
+    def _generate(prompt, max_tokens):
+        messages = [
+            {"role": "user", "content": [
+                {"type": "image", "image": pil_img},
+                {"type": "text", "text": prompt},
+            ]}
+        ]
+        text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        inputs = processor(text=[text], images=[pil_img], return_tensors="pt", padding=True).to(device)
+        out = model.generate(**inputs, max_new_tokens=max_tokens)
+        return processor.batch_decode(
+            out[:, inputs.input_ids.shape[1]:], skip_special_tokens=True,
+        )[0].strip()
+
+    detailed = _generate(
         "Describe this image in great detail for an artist to recreate it faithfully. "
         "Include: art style, scene composition, all visible objects, colors, lighting, "
-        "textures, and mood."
+        "textures, and mood.",
+        1024,
     )
-    messages = [
-        {"role": "user", "content": [
-            {"type": "image", "image": pil_img},
-            {"type": "text", "text": prompt},
-        ]}
-    ]
 
-    text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    inputs = processor(text=[text], images=[pil_img], return_tensors="pt", padding=True).to(device)
-    out = model.generate(**inputs, max_new_tokens=1024)
-    return processor.batch_decode(
-        out[:, inputs.input_ids.shape[1]:], skip_special_tokens=True,
-    )[0].strip()
+    short = _generate(
+        "Summarize this image in one short paragraph (under 50 words). "
+        "Start with the art style (e.g., pixel art, watercolor, 3D render), "
+        "then describe the subject, key colors, lighting, and mood.",
+        80,
+    )
+
+    return detailed, short
 
 
 def main():
@@ -292,14 +316,17 @@ def main():
         help="Generate a detailed AI description of the image using Qwen2-VL.",
     )
     parser.add_argument(
-        "--fetch-model", action="store_true",
-        help="Allow downloading / updating HuggingFace models. By default, cached models are used offline.",
+        "--save-description", action="store_true",
+        help="Save descriptions to tmp/description.md and tmp/description.short.md.",
     )
-
+    parser.add_argument(
+        "--fetch-latest-model", action="store_true",
+        help="Force re-download HuggingFace models to get the latest version.",
+    )
     args = parser.parse_args()
 
-    if not args.fetch_model:
-        os.environ["HF_HUB_OFFLINE"] = "1"
+    if not args.fetch_latest_model:
+        enable_hf_offline()
 
     if not os.path.isfile(args.input):
         parser.error(f"Input file not found: {args.input}")
@@ -346,17 +373,40 @@ def main():
     if args.describe:
         console.print(Rule("[bold cyan]📝 Description[/bold cyan]", align="left"))
         console.print()
-        description = analyze_description(image)
+        detailed, short = analyze_description(image)
         console.print()
-        # Sanitize: collapse runs of whitespace, strip each line, drop blanks.
-        lines = []
-        for line in description.split("\n"):
-            line = re.sub(r'\s+', ' ', line).strip()
-            if line:
-                lines.append(line)
-        clean = "\n".join(lines)
-        console.print(Panel(clean, title="Model · Qwen/Qwen2-VL-2B-Instruct", border_style="dim", padding=(1, 2)))
+        console.print("  Model: Qwen/Qwen2-VL-2B-Instruct")
         console.print()
+
+        def _sanitize(text):
+            lines = []
+            for line in text.split("\n"):
+                line = re.sub(r'\s+', ' ', line).strip()
+                if line:
+                    lines.append(line)
+            return "\n".join(lines)
+
+        clean_detailed = _sanitize(detailed)
+        clean_short = _sanitize(short)
+
+        console.print("  Detailed:")
+        console.print(Panel(clean_detailed, border_style="dim", padding=(1, 2)))
+        console.print()
+        console.print("  Short:")
+        console.print(Panel(clean_short, border_style="dim", padding=(1, 2)))
+        console.print()
+
+        # Optionally write descriptions to files for use with --prompt in other tools.
+        if args.save_description:
+            os.makedirs("tmp", exist_ok=True)
+            desc_path = os.path.join("tmp", "description.md")
+            with open(desc_path, "w") as f:
+                f.write(clean_detailed + "\n")
+            short_path = os.path.join("tmp", "description.short.md")
+            with open(short_path, "w") as f:
+                f.write(clean_short + "\n")
+            console.print(f"  Saved to [bold]{desc_path}[/bold] and [bold]{short_path}[/bold]")
+            console.print()
 
     # Section: Depth (optional, with subsections)
     if args.depth:
@@ -380,23 +430,23 @@ def main():
         console.print(layer_table)
         console.print()
 
-        # Subsection: Halo Analysis
-        halo = depth["halo_analysis"]
-        console.print("  [bold dim]Halo Analysis[/bold dim]")
+        # Subsection: Outline Analysis
+        outlines = depth["outline_analysis"]
+        console.print("  [bold dim]Outline Analysis[/bold dim]")
         console.print("  [dim]─────────────────[/dim]")
-        if halo["total_fragments"] > 0:
-            console.print(f"  Fragments: {halo['total_fragments']} ({halo['total_pixels']} pixels, {halo['pct_of_image']:.2f}% of image)")
-            console.print(f"  Thickness: min {halo['min']}px, median {halo['median']}px, max {halo['max']}px")
-            halo_table = Table(box=None, padding=(0, 2))
-            halo_table.add_column("Radius", justify="right")
-            halo_table.add_column("Halos caught", justify="right")
-            halo_table.add_column("Coverage", justify="right")
-            for r, caught, pct in halo["coverage"]:
+        if outlines["total_fragments"] > 0:
+            console.print(f"  Fragments: {outlines['total_fragments']} ({outlines['total_pixels']} pixels, {outlines['pct_of_image']:.2f}% of image)")
+            console.print(f"  Thickness: min {outlines['min']}px, median {outlines['median']}px, max {outlines['max']}px")
+            outline_table = Table(box=None, padding=(0, 2))
+            outline_table.add_column("Radius", justify="right")
+            outline_table.add_column("Outlines caught", justify="right")
+            outline_table.add_column("Coverage", justify="right")
+            for r, caught, pct in outlines["coverage"]:
                 marker = " ✅" if r == depth["recommended_clean_edges"] else ""
-                halo_table.add_row(str(r), str(caught), f"{pct:.0f}%{marker}")
-            console.print(halo_table)
+                outline_table.add_row(str(r), str(caught), f"{pct:.0f}%{marker}")
+            console.print(outline_table)
         else:
-            console.print("  No halos detected.")
+            console.print("  No outlines detected.")
         console.print()
 
         # Subsection: Recommendations
@@ -407,7 +457,7 @@ def main():
         if rec_ce > 0:
             console.print(f"  Clean edges: [bold]{rec_ce}px[/bold]")
         else:
-            console.print("  Clean edges: not needed (no significant halos detected)")
+            console.print("  Clean edges: not needed (no significant outlines detected)")
 
     console.print()
 

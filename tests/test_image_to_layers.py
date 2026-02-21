@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for extract_image_layers tool."""
+"""Tests for image_to_layers tool."""
 
 import os
 import subprocess
@@ -11,7 +11,7 @@ import numpy as np
 
 
 TOOLS_DIR = os.path.join(os.path.dirname(__file__), "..", "tools")
-SPLIT = os.path.join(TOOLS_DIR, "extract_image_layers.py")
+SPLIT = os.path.join(TOOLS_DIR, "image_to_layers.py")
 
 
 def run_tool(args):
@@ -114,14 +114,14 @@ def test_feathering():
 
 
 def test_preview_depth_map():
-    """--preview should output a depth map image."""
+    """--depth-map should output a depth map image."""
     with tempfile.TemporaryDirectory() as tmpdir:
         img_path = os.path.join(tmpdir, "test.png")
         out_dir = os.path.join(tmpdir, "out")
         _make_gradient_image(img_path)
 
         run_tool([SPLIT, "--no-model", "--input", img_path, "--layers", "2",
-                  "--output-dir", out_dir, "--preview"])
+                  "--output-dir", out_dir, "--depth-map"])
 
         files = os.listdir(out_dir)
         depth_maps = [f for f in files if "depth_map" in f]

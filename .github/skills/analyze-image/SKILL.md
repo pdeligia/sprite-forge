@@ -1,6 +1,6 @@
 ---
 name: analyze-image
-description: Analyze an image and report statistics (dimensions, colors, depth, parallax layer recommendations). Use this skill before extract-image-layers to determine optimal layer count.
+description: Analyze an image and report statistics (dimensions, colors, depth, parallax layer recommendations). Use this skill before image-to-layers to determine optimal layer count.
 ---
 
 # analyze-image
@@ -36,9 +36,9 @@ uv run analyze-image <image.png> [options]
 - Coverage table showing pixel distribution across 2–5 layer splits
 
 ## Workflow
-Use before `extract-image-layers` to decide how many layers:
+Use before `image-to-layers` to decide how many layers:
 1. `uv run analyze-image image.png --depth` → get recommended layers
-2. `uv run extract-image-layers --input image.png --layers N` → split
+2. `uv run image-to-layers --input image.png --layers N` → split
 
 ## Examples
 

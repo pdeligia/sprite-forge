@@ -24,11 +24,25 @@ def get_device():
 
 def load_depth_pipeline(model_size):
     """Load the Depth Anything V2 pipeline."""
+    import logging
+    import warnings
     from transformers import pipeline as hf_pipeline
+    from tools.lib.console import run_with_hf_fallback
     model_name = MODEL_MAP[model_size]
     device = get_device()
     print(f"Loading {model_name} on {device}...")
-    pipe = hf_pipeline(task="depth-estimation", model=model_name, device=device)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=".*fast processor.*")
+        # Also suppress the transformers logger for this message.
+        tf_logger = logging.getLogger("transformers")
+        prev_level = tf_logger.level
+        tf_logger.setLevel(logging.ERROR)
+        try:
+            pipe = run_with_hf_fallback(
+                hf_pipeline, task="depth-estimation", model=model_name, device=device, use_fast=True,
+            )
+        finally:
+            tf_logger.setLevel(prev_level)
     return pipe
 
 
