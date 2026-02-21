@@ -1,15 +1,15 @@
 ---
-name: analyze-mp4
-description: Analyze an MP4 video and recommend the optimal number of frames for animation extraction. Use this skill before mp4-to-frames to determine how many frames to extract for smooth, efficient animations.
+name: analyze-video
+description: Analyze an MP4 video and recommend the optimal number of frames for animation extraction. Use this skill before video-to-frames to determine how many frames to extract for smooth, efficient animations.
 ---
 
-# analyze-mp4
+# analyze-video
 
 A Python tool that analyzes an MP4 video's motion characteristics and recommends the optimal number of frames (N) for animation extraction.
 
 ## How to Run
 ```bash
-uv run analyze-mp4 <input.mp4> [options]
+uv run analyze-video <input.mp4> [options]
 ```
 
 ## Arguments
@@ -59,29 +59,29 @@ The tool prints:
 - Requires `uv sync` to have been run first to install dependencies (opencv-python, scikit-image).
 
 ## Workflow
-Use this tool before `mp4-to-frames` to decide how many frames to extract:
-1. `uv run analyze-mp4 video.mp4 --loop` → get recommended N
-2. `uv run mp4-to-frames video.mp4 <N> --loop --prefix forest` → extract frames
+Use this tool before `video-to-frames` to decide how many frames to extract:
+1. `uv run analyze-video video.mp4 --loop` → get recommended N
+2. `uv run video-to-frames video.mp4 <N> --loop --prefix forest` → extract frames
 
 ## Examples
 
 ### Analyze full video
 ```bash
-uv run analyze-mp4 video.mp4
+uv run analyze-video video.mp4
 ```
 
 ### Analyze a specific time range
 ```bash
-uv run analyze-mp4 video.mp4 --start 2.5 --end 6.0
+uv run analyze-video video.mp4 --start 2.5 --end 6.0
 ```
 
 ### Analyze with loop detection
 ```bash
-uv run analyze-mp4 video.mp4 --loop
+uv run analyze-video video.mp4 --loop
 ```
 
 ### Analyze loop within a time range, with output dimensions
 ```bash
-uv run analyze-mp4 video.mp4 --loop \
+uv run analyze-video video.mp4 --loop \
   --start 2 --end 8 --region 140 1 1140 719 --width 3072
 ```

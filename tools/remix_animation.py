@@ -330,7 +330,7 @@ def main():
     )
     parser.add_argument(
         "--input-dir", required=True,
-        help="Directory of animation frame PNGs (e.g., from mp4-to-frames).",
+        help="Directory of animation frame PNGs (e.g., from video-to-frames).",
     )
     parser.add_argument("--prefix", help="Filter input files by prefix")
     parser.add_argument(

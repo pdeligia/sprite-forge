@@ -71,8 +71,8 @@ uv run image-to-layers --input scene.png --layers 3 --feather 5 --depth-map
 uv run image-to-layers --input scene.png --layers 4 --model large --depth-map
 ```
 
-### Batch split all frames from mp4-to-frames
+### Batch split all frames from video-to-frames
 ```bash
-uv run image-to-layers --input-dir ./tmp/mp4_to_frames \
+uv run image-to-layers --input-dir ./tmp/video_to_frames \
   --prefix forest_dungeon_bg --layers 3 --suffix "@3x"
 ```

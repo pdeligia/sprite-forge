@@ -82,8 +82,8 @@ def main():
     )
     parser.add_argument("--prefix", help="Filter input files by prefix")
     parser.add_argument(
-        "--output", default="./tmp/frames_to_mp4/output.mp4",
-        help="Output MP4 file path (default: ./tmp/frames_to_mp4/output.mp4)",
+        "--output", default="./tmp/frames_to_video/output.mp4",
+        help="Output MP4 file path (default: ./tmp/frames_to_video/output.mp4)",
     )
     parser.add_argument(
         "--fps", type=float, default=10,

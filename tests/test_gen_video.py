@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for gen_mp4 tool."""
+"""Tests for gen_video tool."""
 
 import os
 import subprocess
@@ -10,7 +10,7 @@ import cv2
 
 
 TOOLS_DIR = os.path.join(os.path.dirname(__file__), "..", "tools")
-GEN_MP4 = os.path.join(TOOLS_DIR, "gen_mp4.py")
+GEN_MP4 = os.path.join(TOOLS_DIR, "gen_video.py")
 
 
 def run_tool(args):
@@ -26,7 +26,7 @@ def test_default_output():
     with tempfile.TemporaryDirectory() as tmpdir:
         out = os.path.join(tmpdir, "test.mp4")
         result = run_tool([GEN_MP4, out])
-        assert result.returncode == 0, f"gen_mp4 failed: {result.stderr}"
+        assert result.returncode == 0, f"gen_video failed: {result.stderr}"
         assert os.path.isfile(out), "Output file not created"
 
         cap = cv2.VideoCapture(out)
@@ -43,7 +43,7 @@ def test_custom_dimensions():
     with tempfile.TemporaryDirectory() as tmpdir:
         out = os.path.join(tmpdir, "test.mp4")
         result = run_tool([GEN_MP4, out, "--width", "640", "--height", "480"])
-        assert result.returncode == 0, f"gen_mp4 failed: {result.stderr}"
+        assert result.returncode == 0, f"gen_video failed: {result.stderr}"
 
         cap = cv2.VideoCapture(out)
         assert int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) == 640
@@ -56,7 +56,7 @@ def test_custom_duration():
     with tempfile.TemporaryDirectory() as tmpdir:
         out = os.path.join(tmpdir, "test.mp4")
         result = run_tool([GEN_MP4, out, "--duration", "2.0", "--fps", "10"])
-        assert result.returncode == 0, f"gen_mp4 failed: {result.stderr}"
+        assert result.returncode == 0, f"gen_video failed: {result.stderr}"
 
         cap = cv2.VideoCapture(out)
         total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -69,7 +69,7 @@ def test_color_preset():
     with tempfile.TemporaryDirectory() as tmpdir:
         out = os.path.join(tmpdir, "test.mp4")
         result = run_tool([GEN_MP4, out, "--color", "blue", "--duration", "0.5"])
-        assert result.returncode == 0, f"gen_mp4 failed: {result.stderr}"
+        assert result.returncode == 0, f"gen_video failed: {result.stderr}"
 
         cap = cv2.VideoCapture(out)
         ret, frame = cap.read()
@@ -85,7 +85,7 @@ def test_color_rgb():
     with tempfile.TemporaryDirectory() as tmpdir:
         out = os.path.join(tmpdir, "test.mp4")
         result = run_tool([GEN_MP4, out, "--color", "0,255,0", "--duration", "0.5"])
-        assert result.returncode == 0, f"gen_mp4 failed: {result.stderr}"
+        assert result.returncode == 0, f"gen_video failed: {result.stderr}"
 
         cap = cv2.VideoCapture(out)
         ret, frame = cap.read()
@@ -96,15 +96,15 @@ def test_color_rgb():
 
 
 def test_default_path():
-    """Generate a video with no output arg (default ./tmp/gen_mp4/test.mp4)."""
+    """Generate a video with no output arg (default ./tmp/gen_video/test.mp4)."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Run from a temp dir so default ./tmp/gen_mp4/test.mp4 goes there.
+        # Run from a temp dir so default ./tmp/gen_video/test.mp4 goes there.
         result = subprocess.run(
             [sys.executable, os.path.abspath(GEN_MP4)],
             capture_output=True, text=True, cwd=tmpdir,
         )
-        assert result.returncode == 0, f"gen_mp4 failed: {result.stderr}"
-        assert os.path.isfile(os.path.join(tmpdir, "tmp", "gen_mp4", "test.mp4")), "Default output not created"
+        assert result.returncode == 0, f"gen_video failed: {result.stderr}"
+        assert os.path.isfile(os.path.join(tmpdir, "tmp", "gen_video", "test.mp4")), "Default output not created"
 
 
 if __name__ == "__main__":

@@ -1,15 +1,15 @@
 ---
-name: mp4-to-frames
+name: video-to-frames
 description: Extract PNG frames from an MP4 video with optional cropping, scaling, time range, and loop detection. Use this skill when the user wants to generate sprite frames, seamless looping animations, or image sequences from video files.
 ---
 
-# mp4-to-frames
+# video-to-frames
 
 A Python tool that extracts N frames from an MP4 video as PNG files, with optional seamless loop detection.
 
 ## How to Run
 ```bash
-uv run mp4-to-frames <input.mp4> <N> [options]
+uv run video-to-frames <input.mp4> <N> [options]
 ```
 
 ## Arguments
@@ -21,7 +21,7 @@ uv run mp4-to-frames <input.mp4> <N> [options]
 ## Options
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--output-dir DIR` | `./tmp/mp4_to_frames` | Output directory (nuked and recreated each run) |
+| `--output-dir DIR` | `./tmp/video_to_frames` | Output directory (nuked and recreated each run) |
 | `--prefix PREFIX` | `frame` | Filename prefix for output PNGs |
 | `--suffix SUFFIX` | (empty) | Filename suffix before .png (e.g., `@3x`) |
 | `--region X1 Y1 X2 Y2` | none | Crop region: top-left (X1, Y1) to bottom-right (X2, Y2) in pixels |
@@ -52,31 +52,31 @@ When `--loop` is specified:
 
 ### Basic extraction
 ```bash
-uv run mp4-to-frames video.mp4 10 --prefix forest
+uv run video-to-frames video.mp4 10 --prefix forest
 ```
 
 ### Crop and scale for game assets
 ```bash
-uv run mp4-to-frames video.mp4 10 --prefix forest \
+uv run video-to-frames video.mp4 10 --prefix forest \
   --region 140 1 1140 719 --width 1024
 ```
 
 ### Extract from a specific time range
 ```bash
-uv run mp4-to-frames video.mp4 10 --start 4 --end 8 --prefix forest
+uv run video-to-frames video.mp4 10 --start 4 --end 8 --prefix forest
 ```
 
 ### Custom output directory
 ```bash
-uv run mp4-to-frames video.mp4 5 --output-dir ./output --prefix bg
+uv run video-to-frames video.mp4 5 --output-dir ./output --prefix bg
 ```
 
 ### Find best loop and extract 10 frames
 ```bash
-uv run mp4-to-frames video.mp4 10 --loop --prefix forest
+uv run video-to-frames video.mp4 10 --loop --prefix forest
 ```
 
 ### Find loop within a time range
 ```bash
-uv run mp4-to-frames video.mp4 10 --loop --start 2 --end 8 --prefix forest
+uv run video-to-frames video.mp4 10 --loop --start 2 --end 8 --prefix forest
 ```

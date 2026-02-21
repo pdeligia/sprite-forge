@@ -1,21 +1,21 @@
 ---
-name: gen-mp4
+name: gen-video
 description: Generate synthetic MP4 videos with configurable dimensions, duration, frame rate, and fill color. Use this skill when the user needs to create placeholder videos, test assets, or synthetic video data.
 ---
 
-# gen-mp4
+# gen-video
 
 A Python tool that generates synthetic MP4 videos.
 
 ## How to Run
 ```bash
-uv run gen-mp4 [output] [options]
+uv run gen-video [output] [options]
 ```
 
 ## Arguments
 | Argument | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `output` | No | `./tmp/gen_mp4/test.mp4` | Output MP4 file path |
+| `output` | No | `./tmp/gen_video/test.mp4` | Output MP4 file path |
 
 ## Options
 | Flag | Default | Description |
@@ -30,15 +30,15 @@ uv run gen-mp4 [output] [options]
 
 ### Generate a default 1-second black video
 ```bash
-uv run gen-mp4
+uv run gen-video
 ```
 
 ### Generate a 5-second 1280x720 blue video
 ```bash
-uv run gen-mp4 ./tmp/bg.mp4 --width 1280 --height 720 --duration 5 --color blue
+uv run gen-video ./tmp/bg.mp4 --width 1280 --height 720 --duration 5 --color blue
 ```
 
 ### Generate with custom RGB color
 ```bash
-uv run gen-mp4 ./tmp/custom.mp4 --color 64,128,255
+uv run gen-video ./tmp/custom.mp4 --color 64,128,255
 ```

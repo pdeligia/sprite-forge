@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for frames_to_mp4 tool."""
+"""Tests for frames_to_video tool."""
 
 import os
 import subprocess
@@ -11,7 +11,7 @@ import numpy as np
 
 
 TOOLS_DIR = os.path.join(os.path.dirname(__file__), "..", "tools")
-COMPOSE = os.path.join(TOOLS_DIR, "frames_to_mp4.py")
+COMPOSE = os.path.join(TOOLS_DIR, "frames_to_video.py")
 
 
 def run_tool(args):

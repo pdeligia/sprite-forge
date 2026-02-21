@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for analyze_mp4 tool."""
+"""Tests for analyze_video tool."""
 
 import os
 import subprocess
@@ -11,8 +11,8 @@ import numpy as np
 
 
 TOOLS_DIR = os.path.join(os.path.dirname(__file__), "..", "tools")
-ANALYZE_MP4 = os.path.join(TOOLS_DIR, "analyze_mp4.py")
-GEN_MP4 = os.path.join(TOOLS_DIR, "gen_mp4.py")
+ANALYZE_MP4 = os.path.join(TOOLS_DIR, "analyze_video.py")
+GEN_MP4 = os.path.join(TOOLS_DIR, "gen_video.py")
 
 
 def run_tool(args):
@@ -57,9 +57,9 @@ def test_basic_analysis():
         run_tool([GEN_MP4, video, "--width", "320", "--height", "240", "--duration", "3"])
 
         result = run_tool([ANALYZE_MP4, video])
-        assert result.returncode == 0, f"analyze_mp4 failed: {result.stderr}"
-        assert "Recommended number of frames (N):" in result.stdout, f"Missing recommended N: {result.stdout}"
-        assert "Motion level:" in result.stdout
+        assert result.returncode == 0, f"analyze_video failed: {result.stderr}"
+        assert "Optimal N:" in result.stdout, f"Missing recommended N: {result.stdout}"
+        assert "Level:" in result.stdout
         assert "Δ-SSIM" in result.stdout
         assert "✅ Recommended" in result.stdout
 
@@ -87,7 +87,7 @@ def test_with_time_range():
 
         result = run_tool([ANALYZE_MP4, video, "--start", "1", "--end", "3"])
         assert result.returncode == 0, f"Failed: {result.stderr}"
-        assert "Recommended number of frames (N):" in result.stdout
+        assert "Optimal N:" in result.stdout
 
 
 def test_with_loop():
@@ -100,7 +100,7 @@ def test_with_loop():
         assert result.returncode == 0, f"Failed: {result.stderr}"
         assert "Best loop:" in result.stdout, f"Expected loop info: {result.stdout}"
         assert "score:" in result.stdout
-        assert "Recommended number of frames (N):" in result.stdout
+        assert "Optimal N:" in result.stdout
 
 
 def test_determinism():
@@ -135,8 +135,8 @@ def test_motion_video_recommends_more_frames():
         # Extract recommended N from output.
         def get_n(output):
             for line in output.split("\n"):
-                if "Recommended number of frames (N):" in line:
-                    return int(line.split(":")[-1].strip())
+                if "Optimal N:" in line:
+                    return int(line.split(":")[-1].strip().split()[0])
             return 0
 
         static_n = get_n(static_result.stdout)

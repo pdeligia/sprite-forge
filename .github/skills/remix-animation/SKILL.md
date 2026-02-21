@@ -50,18 +50,18 @@ Layers are specified back-to-front. Missing values default to 1.0.
 
 ### Slow down background, keep foreground at original speed
 ```bash
-uv run remix-animation --input-dir ./tmp/mp4_to_frames \
+uv run remix-animation --input-dir ./tmp/video_to_frames \
   --layers 4 --frames 16 --speed 0.25,0.5,1.0,1.0 --suffix "@3x"
 ```
 
 ### Double the frame count with uniform speed
 ```bash
-uv run remix-animation --input-dir ./tmp/mp4_to_frames \
+uv run remix-animation --input-dir ./tmp/video_to_frames \
   --layers 3 --frames 8
 ```
 
 ### Preview depth layer assignments
 ```bash
-uv run remix-animation --input-dir ./tmp/mp4_to_frames \
+uv run remix-animation --input-dir ./tmp/video_to_frames \
   --layers 4 --depth-map
 ```

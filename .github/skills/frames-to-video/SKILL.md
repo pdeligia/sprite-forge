@@ -1,15 +1,15 @@
 ---
-name: frames-to-mp4
+name: frames-to-video
 description: Compose an MP4 video from a directory of PNG frames. Use this skill when the user wants to preview animations, create video from sprite frames, or convert image sequences to video.
 ---
 
-# frames-to-mp4
+# frames-to-video
 
 A Python tool that composes an MP4 video from a directory of PNG frames. Useful for previewing animations, converting frame sequences to video, or creating looping video assets.
 
 ## How to Run
 ```bash
-uv run frames-to-mp4 --input-dir <frames_dir> [options]
+uv run frames-to-video --input-dir <frames_dir> [options]
 ```
 
 ## Options
@@ -17,28 +17,28 @@ uv run frames-to-mp4 --input-dir <frames_dir> [options]
 |------|---------|-------------|
 | `--input-dir DIR` | required | Directory of PNG frames (sorted alphabetically) |
 | `--prefix PREFIX` | (none) | Filter input files by prefix |
-| `--output FILE` | `./tmp/frames_to_mp4/output.mp4` | Output MP4 file path |
+| `--output FILE` | `./tmp/frames_to_video/output.mp4` | Output MP4 file path |
 | `--fps N` | `10` | Frames per second. Lower = slower frame switches |
-| `--loop N` | `1` | Repeat the frame sequence N times |
+| `--ping-pong` | off | Append frames in reverse for a seamless back-and-forth loop (2× length) |
 
 ## Examples
 
 ### Basic: compose frames into video
 ```bash
-uv run frames-to-mp4 --input-dir ./tmp/remix_animation --output preview.mp4
+uv run frames-to-video --input-dir ./tmp/remix_animation --output preview.mp4
 ```
 
 ### Slow animation preview at 4 fps
 ```bash
-uv run frames-to-mp4 --input-dir ./tmp/remix_animation --fps 4 --output slow.mp4
+uv run frames-to-video --input-dir ./tmp/remix_animation --fps 4 --output slow.mp4
 ```
 
-### Loop 3 times for longer preview
+### Ping-pong loop
 ```bash
-uv run frames-to-mp4 --input-dir ./tmp/mp4_to_frames --loop 3 --output looped.mp4
+uv run frames-to-video --input-dir ./tmp/remix_animation --ping-pong --output looped.mp4
 ```
 
 ### Filter frames by prefix
 ```bash
-uv run frames-to-mp4 --input-dir ./tmp/mp4_to_frames --prefix forest_ --output forest.mp4
+uv run frames-to-video --input-dir ./tmp/video_to_frames --prefix forest_ --output forest.mp4
 ```

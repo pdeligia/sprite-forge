@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 from skimage.metrics import structural_similarity as ssim
 
-from tools.lib.console import console, Table, Rule
+from tools.lib.console import console, Table
 from tools.lib.video_utils import find_loop_segment, sample_frames_ssim
 
 
@@ -139,10 +139,27 @@ def analyze_video(input_path, start, end, loop, region, width):
     t_start = start if start is not None else 0.0
     t_end = end if end is not None else duration
 
+    # Print header immediately with known metadata.
+    fname = os.path.basename(input_path)
+    console.print()
+    console.print("[bold cyan]🎬 Video[/bold cyan]")
+    console.print()
+    console.print(f"  File: [cyan]{fname}[/cyan]")
+    console.print(f"  Resolution: [cyan]{vw}×{vh}[/cyan]")
+    console.print(f"  FPS: [cyan]{fps:.0f}[/cyan]")
+    console.print(f"  Duration: [cyan]{duration:.1f}s[/cyan] ({total_frames} frames)")
+    if start is not None or end is not None:
+        console.print(f"  Segment: [cyan]{t_start:.2f}s – {t_end:.2f}s[/cyan]")
+    if region:
+        console.print(f"  Region: [cyan]{region[0]},{region[1]} → {region[2]},{region[3]}[/cyan]")
+    if width:
+        console.print(f"  Output: [cyan]{out_w}×{out_h}[/cyan]")
+    console.print()
+
     # If --loop, find the best loop segment first.
     loop_info = None
     if loop:
-        console.print(f"Scanning for loop in {t_start:.2f}s–{t_end:.2f}s...")
+        console.print("  Scanning for loop...")
         result = find_loop_segment(cap, t_start, t_end)
         if result is None:
             print("Error: could not find a suitable loop segment.", file=sys.stderr)
@@ -173,6 +190,20 @@ def analyze_video(input_path, start, end, loop, region, width):
 
     motion = classify_motion(avg_ssim)
 
+    # Detect jittery frames (SSIM drops below mean - 2σ).
+    pair_ssims = []
+    for i in range(len(samples) - 1):
+        pair_ssims.append(ssim(samples[i][1], samples[i + 1][1]))
+    mean_ssim = np.mean(pair_ssims)
+    std_ssim = np.std(pair_ssims)
+    jitter_threshold = mean_ssim - 2 * std_ssim
+    jitter_frames = []
+    for i, s in enumerate(pair_ssims):
+        if s < jitter_threshold:
+            frame_num = i + 1
+            t = samples[i][0]
+            jitter_frames.append((frame_num, t, s))
+
     # Find optimal N.
     max_n = min(native_frames_in_segment, 60)  # Cap search at 60.
     optimal_n = find_optimal_n(samples, span, max_n)
@@ -184,23 +215,46 @@ def analyze_video(input_path, start, end, loop, region, width):
         tier_ns.append(optimal_n)
         tier_ns.sort()
 
-    # Print header.
-    fname = os.path.basename(input_path)
-    console.print(Rule(f"[bold cyan]🎬 Video · {fname}[/bold cyan]", align="left"))
-    console.print()
     if start is not None or end is not None:
-        seg_start = start if start is not None else 0.0
-        seg_end = end if end is not None else duration
-        console.print(f"  FPS: [cyan]{fps:.0f}[/cyan], {span:.1f}s segment [{t_start:.2f}s–{t_end:.2f}s], {native_frames_in_segment} native frames")
-    else:
-        console.print(f"  FPS: [cyan]{fps:.0f}[/cyan], {span:.1f}s, {native_frames_in_segment} native frames")
+        console.print(f"  Segment: [cyan]{t_start:.2f}s – {t_end:.2f}s[/cyan] ({span:.1f}s, {native_frames_in_segment} frames)")
+        console.print()
 
     if loop_info:
         ls, le, sc = loop_info
-        console.print(f"  Best loop: {ls:.2f}s → {le:.2f}s (score: {sc:.3f}, {span:.1f}s segment, {native_frames_in_segment} native frames)")
+        console.print(f"  Best loop: [cyan]{ls:.2f}s → {le:.2f}s[/cyan] (score: {sc:.3f})")
+        console.print()
 
-    console.print(f"  Motion level: [bold]{motion}[/bold] (avg inter-frame SSIM: {avg_ssim:.2f})")
-    console.print(f"  Recommended number of frames (N): [bold]{optimal_n}[/bold]")
+    # Motion section.
+    console.print("[bold cyan]📊 Motion[/bold cyan]")
+    console.print()
+    console.print(f"  Level: [bold]{motion}[/bold] (avg inter-frame SSIM: {avg_ssim:.3f})")
+    console.print()
+
+    # Jitter section.
+    console.print("  [bold dim]Jitter Analysis[/bold dim]")
+    console.print("  [dim]─────────────────[/dim]")
+    if jitter_frames:
+        console.print(f"  [bold red]{len(jitter_frames)} jittery frame(s)[/bold red] (threshold: SSIM < {jitter_threshold:.3f})")
+        console.print()
+        jitter_table = Table(box=None, padding=(0, 2))
+        jitter_table.add_column("Frame", style="bold", justify="right")
+        jitter_table.add_column("Time", justify="right")
+        jitter_table.add_column("SSIM", justify="right")
+        for frame_num, t, s in jitter_frames:
+            jitter_table.add_row(
+                str(frame_num),
+                f"[cyan]{t:.2f}s[/cyan]",
+                f"[red]{s:.3f}[/red]",
+            )
+        console.print(jitter_table)
+    else:
+        console.print("  [green]No jitter detected[/green]")
+    console.print()
+
+    # Recommendation section.
+    console.print("[bold cyan]🎯 Recommendation[/bold cyan]")
+    console.print()
+    console.print(f"  Optimal N: [bold]{optimal_n}[/bold] frames")
     console.print()
 
     # Print table.

@@ -17,14 +17,17 @@ dependencies = [
 
 [project.scripts]
 analyze-image = "tools.analyze_image:main"
-analyze-mp4 = "tools.analyze_mp4:main"
-mp4-to-frames = "tools.mp4_to_frames:main"
-frames-to-mp4 = "tools.frames_to_mp4:main"
-gen-mp4 = "tools.gen_mp4:main"
+analyze-video = "tools.analyze_video:main"
+crop-video = "tools.crop_video:main"
+frames-to-video = "tools.frames_to_video:main"
+gen-video = "tools.gen_video:main"
 image-to-layers = "tools.image_to_layers:main"
+loop-video = "tools.loop_video:main"
 merge-image = "tools.merge_image:main"
 remix-animation = "tools.remix_animation:main"
 scale-image = "tools.scale_image:main"
+smooth-video = "tools.smooth_video:main"
+video-to-frames = "tools.video_to_frames:main"
 
 [build-system]
 requires = ["hatchling"]
