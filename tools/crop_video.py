@@ -6,9 +6,75 @@ import os
 import sys
 
 import cv2
+import numpy as np
 from rich.table import Table
 
 from tools.lib.console import console
+
+
+def detect_content_bounds(input_path, t_start=None, t_end=None, threshold=10, sample_count=10):
+    """Detect the bounding box of non-black content across sampled frames.
+
+    Samples frames evenly across the time range, accumulates a brightness mask,
+    and finds bounds using column/row density to ignore small logos in black bars.
+    Returns (x1, y1, x2, y2).
+    """
+    cap = cv2.VideoCapture(input_path)
+    if not cap.isOpened():
+        return None
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duration = frame_count / fps if fps > 0 else 0
+    vw = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    vh = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    start = t_start if t_start is not None else 0.0
+    end = t_end if t_end is not None else duration
+    span = end - start
+
+    step = span / sample_count if sample_count > 1 else span / 2
+
+    # Accumulate how many sampled frames have non-black pixels at each location.
+    heat = np.zeros((vh, vw), dtype=np.float32)
+    sampled = 0
+
+    for i in range(sample_count):
+        t = start + step * i + step / 2
+        cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
+        ret, frame = cap.read()
+        if not ret:
+            continue
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        heat += (gray > threshold).astype(np.float32)
+        sampled += 1
+
+    cap.release()
+    if sampled == 0:
+        return None
+
+    # A pixel is "content" if it's non-black in most sampled frames.
+    content_mask = heat >= (sampled * 0.5)
+
+    # Project onto columns and rows: fraction of pixels that are content.
+    col_density = content_mask.mean(axis=0)  # shape (vw,)
+    row_density = content_mask.mean(axis=1)  # shape (vh,)
+
+    # Content columns/rows have high density (>20% of the axis is lit).
+    # Black bars with a small logo have very low density.
+    density_threshold = 0.2
+    content_cols = np.where(col_density > density_threshold)[0]
+    content_rows = np.where(row_density > density_threshold)[0]
+
+    if len(content_cols) == 0 or len(content_rows) == 0:
+        return None
+
+    x1 = int(content_cols[0])
+    x2 = int(content_cols[-1] + 1)
+    y1 = int(content_rows[0])
+    y2 = int(content_rows[-1] + 1)
+
+    return (x1, y1, x2, y2)
 
 
 def crop_video(input_path, output_path, region, width, t_start, t_end):
@@ -113,7 +179,14 @@ def main():
     )
     parser.add_argument("--start", type=float, default=None, help="Start time in seconds.")
     parser.add_argument("--end", type=float, default=None, help="End time in seconds.")
+    parser.add_argument(
+        "--auto-crop", action="store_true",
+        help="Auto-detect content bounds by removing black bars.",
+    )
     args = parser.parse_args()
+
+    if args.region and args.auto_crop:
+        parser.error("Cannot use --region and --auto-crop together")
 
     if args.region:
         x1, y1, x2, y2 = args.region
@@ -133,8 +206,19 @@ def main():
     duration = frame_count / fps if fps > 0 else 0
     cap.release()
 
-    src_w = (args.region[2] - args.region[0]) if args.region else vw
-    src_h = (args.region[3] - args.region[1]) if args.region else vh
+    # Auto-detect content bounds if requested.
+    region = args.region
+    if args.auto_crop:
+        console.print("  Detecting content bounds...")
+        bounds = detect_content_bounds(args.input, args.start, args.end)
+        if bounds is None:
+            print("Error: could not detect content bounds.", file=sys.stderr)
+            sys.exit(1)
+        region = list(bounds)
+        console.print(f"  Detected: [cyan]{region[0]},{region[1]} → {region[2]},{region[3]}[/cyan]")
+
+    src_w = (region[2] - region[0]) if region else vw
+    src_h = (region[3] - region[1]) if region else vh
     if args.width:
         scale = args.width / src_w
         out_w = args.width
@@ -150,8 +234,8 @@ def main():
     info_table.add_column()
     info_table.add_row("Input", f"[cyan]{os.path.abspath(args.input)}[/cyan]")
     info_table.add_row("Source", f"[cyan]{vw}×{vh}[/cyan] at [cyan]{fps}[/cyan] fps")
-    if args.region:
-        info_table.add_row("Region", f"[cyan]{args.region[0]},{args.region[1]} → {args.region[2]},{args.region[3]}[/cyan]")
+    if region:
+        info_table.add_row("Region", f"[cyan]{region[0]},{region[1]} → {region[2]},{region[3]}[/cyan]")
     info_table.add_row("Output size", f"[cyan]{out_w}×{out_h}[/cyan]")
     info_table.add_row("Range", f"[cyan]{t_start:.1f}s – {t_end:.1f}s[/cyan]")
     console.print(info_table)
@@ -159,7 +243,7 @@ def main():
 
     console.print("  Processing...")
     total, out_w, out_h, fps = crop_video(
-        args.input, args.output, args.region, args.width, args.start, args.end,
+        args.input, args.output, region, args.width, args.start, args.end,
     )
 
     out_duration = total / fps

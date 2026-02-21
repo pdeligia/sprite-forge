@@ -42,17 +42,8 @@ def detect_jitter(frames, sigma=2.0):
     return jittery, threshold, mean_s, std_s
 
 
-def smooth_frames(frames, jittery_indices, budget=1):
-    """Replace frames around each jitter point with a gradual blend.
-
-    budget controls how many frames to replace per jitter point. A budget of 1
-    replaces only the bad frame. A budget of 5 replaces 5 frames centered on the
-    jitter point, creating a gradual transition across the window.
-    """
-    result = list(frames)
-    n = len(frames)
-
-    # Group consecutive jittery indices into runs.
+def _group_runs(jittery_indices):
+    """Group consecutive indices into runs."""
     jitter_set = set(jittery_indices)
     runs = []
     current_run = []
@@ -63,19 +54,27 @@ def smooth_frames(frames, jittery_indices, budget=1):
         current_run.append(idx)
     if current_run:
         runs.append(current_run)
+    return runs
 
-    for run in runs:
-        # Expand the run by budget to create a transition window.
-        center = (run[0] + run[-1]) // 2
-        half = budget // 2
-        win_start = max(center - half, 1)
-        win_end = min(center + half, n - 2)
 
-        # Anchor frames: the untouched frames just outside the window.
+def _compute_window(run, budget, n):
+    """Compute the replacement window around a jitter run."""
+    center = (run[0] + run[-1]) // 2
+    half = budget // 2
+    win_start = max(center - half, 1)
+    win_end = min(center + half, n - 2)
+    return win_start, win_end
+
+
+def smooth_frames(frames, jittery_indices, budget=1):
+    """Replace frames around each jitter point with a linear blend."""
+    result = list(frames)
+    n = len(frames)
+
+    for run in _group_runs(jittery_indices):
+        win_start, win_end = _compute_window(run, budget, n)
         before = win_start - 1
         after = win_end + 1
-
-        # Linear blend across the window.
         win_len = win_end - win_start + 1
         for j in range(win_len):
             idx = win_start + j
@@ -83,6 +82,55 @@ def smooth_frames(frames, jittery_indices, budget=1):
             result[idx] = cv2.addWeighted(
                 frames[before], 1.0 - alpha, frames[after], alpha, 0
             )
+
+    return result
+
+
+def smooth_frames_rife(frames, jittery_indices, budget=1):
+    """Replace frames around each jitter point using RIFE AI interpolation."""
+    import torch
+    from torchvision import transforms
+
+    from ccvfi import AutoModel, ConfigType
+
+    model = AutoModel.from_pretrained(
+        pretrained_model_name=ConfigType.RIFE_IFNet_v426_heavy
+    )
+    model.device = torch.device("cpu")
+    model.fp16 = False
+    model.model = model.model.float().cpu()
+
+    def _to_tensor(img):
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        return transforms.ToTensor()(img_rgb).unsqueeze(0)
+
+    def _interpolate(img0, img1, t):
+        inp = torch.stack([_to_tensor(img0), _to_tensor(img1)], dim=1)
+        with torch.inference_mode():
+            out = model.inference(inp, timestep=t, scale=1.0)
+        img = out.squeeze(0).permute(1, 2, 0).cpu().numpy()
+        img = (img * 255).clip(0, 255).astype("uint8")
+        return cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
+    result = list(frames)
+    n = len(frames)
+
+    runs = _group_runs(jittery_indices)
+    for ri, run in enumerate(runs):
+        win_start, win_end = _compute_window(run, budget, n)
+        before = win_start - 1
+        after = win_end + 1
+        win_len = win_end - win_start + 1
+
+        console.print(
+            f"  RIFE interpolating jitter {ri + 1}/{len(runs)} "
+            f"({win_len} frames)..."
+        )
+
+        for j in range(win_len):
+            idx = win_start + j
+            t = (j + 1) / (win_len + 1)
+            result[idx] = _interpolate(frames[before], frames[after], t)
 
     return result
 
@@ -109,6 +157,11 @@ def main():
         help="Frames to spend per jitter point for gradual transition. "
         "0 = auto (scale based on SSIM gap). Higher = smoother but more ghosting.",
     )
+    parser.add_argument(
+        "--mode", choices=["blend", "ai"], default="blend",
+        help="Interpolation mode: 'blend' (fast linear blend) or "
+        "'ai' (AI frame interpolation, slower but motion-aware). Default: blend.",
+    )
     args = parser.parse_args()
 
     cap = cv2.VideoCapture(args.input)
@@ -134,6 +187,7 @@ def main():
     info_table.add_row("FPS", f"[cyan]{fps:.0f}[/cyan]")
     info_table.add_row("Frames", f"[cyan]{frame_count}[/cyan] ({duration:.1f}s)")
     info_table.add_row("Sigma", f"[cyan]{args.sigma}[/cyan]")
+    info_table.add_row("Mode", f"[cyan]{args.mode}[/cyan]")
     console.print(info_table)
     console.print()
 
@@ -194,7 +248,11 @@ def main():
         # Map gap to budget: 0.01→1, 0.1→5, 0.3→11, 0.5→15
         budget = max(1, min(15, int(gap * 30 + 0.5)))
 
-    smoothed = smooth_frames(frames, jittery_indices, budget=budget)
+    smoothed = (
+        smooth_frames_rife(frames, jittery_indices, budget=budget)
+        if args.mode == "ai"
+        else smooth_frames(frames, jittery_indices, budget=budget)
+    )
 
     # Write output.
     abs_output = os.path.abspath(args.output)

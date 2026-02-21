@@ -35,7 +35,7 @@ def test_basic_extraction():
         assert result.returncode == 0, f"gen_video failed: {result.stderr}"
 
         # Extract 4 frames.
-        result = run_tool([EXTRACT_MP4_FRAMES, video, "4", "--output-dir", frames_dir, "--prefix", "test"])
+        result = run_tool([EXTRACT_MP4_FRAMES, "--input", video, "--frames", "4", "--output-dir", frames_dir, "--prefix", "test"])
         assert result.returncode == 0, f"video_to_frames failed: {result.stderr}"
 
         # Verify frame count.
@@ -54,7 +54,7 @@ def test_region_crop():
         frames_dir = os.path.join(tmpdir, "frames")
 
         run_tool([GEN_MP4, video, "--width", "320", "--height", "240", "--duration", "1"])
-        result = run_tool([EXTRACT_MP4_FRAMES, video, "1", "--output-dir", frames_dir, "--region", "10", "10", "160", "130"])
+        result = run_tool([EXTRACT_MP4_FRAMES, "--input", video, "--frames", "1", "--output-dir", frames_dir, "--region", "10", "10", "160", "130"])
         assert result.returncode == 0, f"video_to_frames failed: {result.stderr}"
 
         img = cv2.imread(os.path.join(frames_dir, "frame_01.png"))
@@ -68,7 +68,7 @@ def test_region_with_width_scaling():
         frames_dir = os.path.join(tmpdir, "frames")
 
         run_tool([GEN_MP4, video, "--width", "320", "--height", "240", "--duration", "1"])
-        result = run_tool([EXTRACT_MP4_FRAMES, video, "1", "--output-dir", frames_dir,
+        result = run_tool([EXTRACT_MP4_FRAMES, "--input", video, "--frames", "1", "--output-dir", frames_dir,
                            "--region", "10", "10", "160", "130", "--width", "600"])
         assert result.returncode == 0, f"video_to_frames failed: {result.stderr}"
 
@@ -83,7 +83,7 @@ def test_time_range():
         frames_dir = os.path.join(tmpdir, "frames")
 
         run_tool([GEN_MP4, video, "--width", "320", "--height", "240", "--duration", "5"])
-        result = run_tool([EXTRACT_MP4_FRAMES, video, "3", "--output-dir", frames_dir, "--start", "1", "--end", "3"])
+        result = run_tool([EXTRACT_MP4_FRAMES, "--input", video, "--frames", "3", "--output-dir", frames_dir, "--start", "1", "--end", "3"])
         assert result.returncode == 0, f"video_to_frames failed: {result.stderr}"
 
         pngs = sorted(f for f in os.listdir(frames_dir) if f.endswith(".png"))
@@ -97,7 +97,7 @@ def test_invalid_region():
         frames_dir = os.path.join(tmpdir, "frames")
 
         run_tool([GEN_MP4, video, "--width", "320", "--height", "240", "--duration", "1"])
-        result = run_tool([EXTRACT_MP4_FRAMES, video, "1", "--output-dir", frames_dir, "--region", "0", "0", "400", "300"])
+        result = run_tool([EXTRACT_MP4_FRAMES, "--input", video, "--frames", "1", "--output-dir", frames_dir, "--region", "0", "0", "400", "300"])
         assert result.returncode != 0, "Expected failure for out-of-bounds region"
 
 
@@ -110,11 +110,11 @@ def test_output_dir_cleanup():
         run_tool([GEN_MP4, video, "--width", "320", "--height", "240", "--duration", "1"])
 
         # First run: 4 frames.
-        run_tool([EXTRACT_MP4_FRAMES, video, "4", "--output-dir", frames_dir])
+        run_tool([EXTRACT_MP4_FRAMES, "--input", video, "--frames", "4", "--output-dir", frames_dir])
         assert len(os.listdir(frames_dir)) == 4
 
         # Second run: 2 frames — old files should be gone.
-        run_tool([EXTRACT_MP4_FRAMES, video, "2", "--output-dir", frames_dir])
+        run_tool([EXTRACT_MP4_FRAMES, "--input", video, "--frames", "2", "--output-dir", frames_dir])
         assert len(os.listdir(frames_dir)) == 2
 
 
@@ -125,7 +125,7 @@ def test_suffix():
         frames_dir = os.path.join(tmpdir, "frames")
 
         run_tool([GEN_MP4, video, "--width", "320", "--height", "240", "--duration", "1"])
-        result = run_tool([EXTRACT_MP4_FRAMES, video, "2", "--output-dir", frames_dir,
+        result = run_tool([EXTRACT_MP4_FRAMES, "--input", video, "--frames", "2", "--output-dir", frames_dir,
                            "--prefix", "forest_dungeon_bg", "--suffix", "@3x"])
         assert result.returncode == 0, f"video_to_frames failed: {result.stderr}"
 
@@ -155,7 +155,7 @@ def test_loop_basic():
         frames_dir = os.path.join(tmpdir, "frames")
         _make_looping_video(video)
 
-        result = run_tool([EXTRACT_MP4_FRAMES, video, "4", "--output-dir", frames_dir, "--loop"])
+        result = run_tool([EXTRACT_MP4_FRAMES, "--input", video, "--frames", "4", "--output-dir", frames_dir, "--loop"])
         assert result.returncode == 0, f"video_to_frames --loop failed: {result.stderr}"
         assert "score:" in result.stdout, f"Expected loop score in output: {result.stdout}"
 
@@ -170,7 +170,7 @@ def test_loop_with_range():
         frames_dir = os.path.join(tmpdir, "frames")
         _make_looping_video(video)
 
-        result = run_tool([EXTRACT_MP4_FRAMES, video, "3", "--output-dir", frames_dir,
+        result = run_tool([EXTRACT_MP4_FRAMES, "--input", video, "--frames", "3", "--output-dir", frames_dir,
                            "--loop", "--start", "0", "--end", "1.5"])
         assert result.returncode == 0, f"video_to_frames --loop failed: {result.stderr}"
 

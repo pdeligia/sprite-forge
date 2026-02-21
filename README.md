@@ -27,6 +27,7 @@ uv sync
 | `image-to-layers` | Split an image into depth layers for parallax | [SKILL.md](.github/skills/image-to-layers/SKILL.md) |
 | `loop-video` | Create a seamlessly looping video | [SKILL.md](.github/skills/loop-video/SKILL.md) |
 | `merge-image` | Composite and merge images together | [SKILL.md](.github/skills/merge-image/SKILL.md) |
+| `merge-video` | Composite a background image behind every frame of a video | [SKILL.md](.github/skills/merge-video/SKILL.md) |
 | `remix-animation` | Remix animation frames with per-layer speed control | [SKILL.md](.github/skills/remix-animation/SKILL.md) |
 | `scale-image` | Scale an image up or down by a given factor | [SKILL.md](.github/skills/scale-image/SKILL.md) |
 | `smooth-video` | Detect and fix jittery frames in a video | [SKILL.md](.github/skills/smooth-video/SKILL.md) |
