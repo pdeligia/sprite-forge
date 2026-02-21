@@ -23,6 +23,7 @@ uv sync
 | `analyze-video` | Analyze video motion and recommend optimal frame count | [SKILL.md](.github/skills/analyze-video/SKILL.md) |
 | `crop-video` | Crop, resize, and trim a video | [SKILL.md](.github/skills/crop-video/SKILL.md) |
 | `frames-to-video` | Compose a video from PNG frames | [SKILL.md](.github/skills/frames-to-video/SKILL.md) |
+| `freeze-layer` | Freeze a depth layer in a video | [SKILL.md](.github/skills/freeze-layer/SKILL.md) |
 | `gen-video` | Generate synthetic test videos | [SKILL.md](.github/skills/gen-video/SKILL.md) |
 | `image-to-layers` | Split an image into depth layers for parallax | [SKILL.md](.github/skills/image-to-layers/SKILL.md) |
 | `loop-video` | Create a seamlessly looping video | [SKILL.md](.github/skills/loop-video/SKILL.md) |
